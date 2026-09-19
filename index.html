@@ -65,7 +65,7 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 <body>
 <header>
 <h1>🏑 Control Administrativo — Hockey</h1>
-<div>Departamento de Sonsonate · Liga 2026 Juvenil de Hockey</div>
+<div id="leagueHeader">Departamento de Sonsonate · Liga 2026 Juvenil de Hockey</div>
 </header>
 <nav id="mainNav">
 <button class="navbtn" data-tab="partidos" onclick="show('partidos')">Partidos</button>
@@ -73,38 +73,86 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 <button class="navbtn" data-tab="tabla" onclick="show('tabla')">Tabla</button>
 <button class="navbtn" data-tab="dashboard" onclick="show('dashboard')">📊 Dashboard</button>
 <button class="navbtn" data-tab="historial" onclick="show('historial')">🔎 Historial</button>
-<button class="navbtn" onclick="generarReporte()">📄 Reporte</button>
-<button class="navbtn" onclick="backup()">💾 Respaldar</button>
-<button class="navbtn" onclick="document.getElementById('restore').click()">📥 Restaurar</button>
-<button class="navbtn" onclick="show('webConfig')">☁️ Web</button>
+<button id="btnReporte" class="navbtn" onclick="generarReporte()">📄 Reporte</button>
+<button class="navbtn solo-admin" onclick="backup()">💾 Respaldar</button>
+<button class="navbtn solo-admin" onclick="document.getElementById('restore').click()">📥 Restaurar</button>
+<button class="navbtn solo-admin" onclick="show('usuariosAdmin');renderUsuariosAdmin()">👥 Usuarios y permisos</button>
+<button class="navbtn solo-admin" onclick="show('webConfig')">☁️ Web</button>
+<button id="btnLogin" class="navbtn" onclick="cloudUser?cloudLogout():cloudLogin()">🔐 Iniciar sesión</button>
 <input id="restore" type="file" accept=".json" class="hidden" onchange="restore(event)">
 </nav>
+<div id="leagueBar" class="panel" style="max-width:1100px;margin:12px auto 0;padding:12px">
+<div class="row" style="margin:0">
+<div><label>Liga activa</label><select id="ligaSelect" onchange="cambiarLiga(this.value)"><option value="">Sonsonate (local)</option></select></div>
+<div id="seasonInfo" class="muted" style="align-self:end">Temporada 2026</div>
+<button class="success solo-admin" onclick="agregarLiga()">➕ Agregar liga</button>
+<button class="warn solo-admin" onclick="actualizarLiga()">✏️ Actualizar liga</button>
+<button class="danger solo-admin" onclick="eliminarLiga()">🗑️ Eliminar liga</button>
+</div>
+<div id="dataMode" class="small muted">Modo compatible</div><div id="roleInfo" class="small muted">👁️ Visitante · solo consulta pública</div>
+</div>
 <main>
 <section id="partidos">
-<div class="panel"><h2>Partidos</h2><p class="muted">Los resultados se guardan automáticamente en este dispositivo (funciona sin internet).</p>
+<div class="panel"><h2 id="tituloPartidos">Partidos</h2><p class="muted">Los resultados se guardan automáticamente en este dispositivo (funciona sin internet).</p>
 <div id="matchList" class="grid"></div></div>
 </section>
 
 <section id="resultados" class="hidden">
-<div class="panel"><h2>📊 Resultados registrados</h2><div id="results"></div></div>
+<div class="panel"><h2 id="tituloResultados">📊 Resultados registrados</h2><div id="results"></div></div>
 </section>
 
 <section id="tabla" class="hidden">
-<div class="panel"><h2>🏆 Tabla de posiciones</h2><p class="muted">Acumulada de todas las jornadas.</p><div id="standings"></div></div>
+<div class="panel"><h2 id="tituloTabla">🏆 Tabla de posiciones</h2><p class="muted">Acumulada de todas las jornadas.</p><div id="standings"></div></div>
 </section>
 
 <section id="dashboard" class="hidden">
-<div class="panel"><h2>📊 Panel de estadísticas</h2><div id="dashboardContent"></div></div>
+<div class="panel"><h2 id="tituloDashboard">📊 Panel de estadísticas</h2><div id="dashboardContent"></div></div>
 </section>
 
 <section id="historial" class="hidden">
-<div class="panel"><h2>🔎 Historial de partidos</h2>
+<div class="panel"><h2 id="tituloHistorial">🔎 Historial de partidos</h2>
 <input type="text" class="search" id="searchInput" placeholder="Buscar equipo, ej: Piedras Pachas" oninput="renderHistorial()">
 <div id="historialResults"></div></div>
 </section>
 
 <section id="reportePreview" class="hidden">
 <div class="panel" id="reporteContent"></div>
+</section>
+
+<section id="usuariosAdmin" class="hidden">
+<div class="panel">
+<h2>👥 Usuarios y permisos</h2>
+<p class="muted">Solo el administrador puede gestionar usuarios. Los permisos se aplican por liga.</p>
+<div class="row">
+  <div><label>Usuario</label><select id="adminUserSelect" onchange="cargarPermisosAdmin()"></select></div>
+  <div><label>Liga</label><select id="adminLigaSelect" onchange="cargarPermisosAdmin()"></select></div>
+</div>
+<div id="adminUserMeta" class="small muted"></div>
+<div class="row" style="margin-top:10px">
+  <div><label>Rol del usuario</label><select id="adminRoleSelect"><option value="user">Usuario</option><option value="admin">Administrador</option></select></div>
+  <div style="align-self:end"><label><input type="checkbox" id="adminActivo"> Usuario activo</label></div>
+  <button class="warn" onclick="guardarPerfilAdmin()">💾 Guardar perfil</button>
+</div>
+<div class="grid" style="margin-top:12px">
+  <div class="card"><b>Consulta</b>
+    <label><input type="checkbox" id="perm_partidos"> Ver partidos</label>
+    <label><input type="checkbox" id="perm_resultados"> Ver resultados</label>
+    <label><input type="checkbox" id="perm_tabla"> Ver tabla</label>
+    <label><input type="checkbox" id="perm_dashboard"> Ver dashboard</label>
+    <label><input type="checkbox" id="perm_reporte"> Ver reporte</label>
+  </div>
+  <div class="card"><b>Administración</b>
+    <label><input type="checkbox" id="perm_gestion_partidos"> Gestionar partidos</label>
+    <label><input type="checkbox" id="perm_gestion_resultados"> Gestionar resultados</label>
+  </div>
+</div>
+<div class="actions">
+ <button class="success" onclick="guardarPermisosAdmin()">💾 Guardar permisos</button>
+ <button class="danger" onclick="quitarAccesoLigaAdmin()">🚫 Quitar acceso a esta liga</button>
+ <button onclick="recargarUsuariosAdmin()">🔄 Actualizar lista</button>
+</div>
+<div id="adminUsersTable" style="margin-top:18px"></div>
+</div>
 </section>
 
 <section id="webConfig" class="hidden">
@@ -118,8 +166,8 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 </div>
 <div class="actions">
 <button class="primary" onclick="configureCloud()">☁️ Conectar</button>
-<button onclick="cloudLogin()">🔐 Iniciar sesión administrador</button>
-<button class="success" onclick="uploadLocalToCloud()">⬆️ Subir datos locales</button>
+<button onclick="cloudLogin()">🔐 Iniciar sesión</button>
+<button class="success solo-admin" onclick="uploadLocalToCloud()">⬆️ Subir datos locales</button>
 <button onclick="downloadCloudToLocal()">⬇️ Cargar datos de la nube</button>
 <button class="danger" onclick="cloudLogout()">Cerrar sesión</button>
 </div>
@@ -184,14 +232,21 @@ const partidosBase = [
 ["15–17 MASCULINA","5","11:00",'Instituto Nacional de Izalco','Centro Escolar "Republica de Libano"',"2","2"]
 ];
 
-const JORNADAS=[
+const LEGACY_JORNADAS=[
  {id:"1",label:"Jornada 1 · 17 Sep",fecha:"Jueves 17 de septiembre de 2026",ronda:1},
  {id:"2",label:"Jornada 2 · 24 Sep",fecha:"Jueves 24 de septiembre de 2026",ronda:2}
 ];
-
-let partidosExtra=[]; // partidos agregados manualmente por el usuario, se guardan aparte
-let equiposExtra=[]; // equipos agregados manualmente por el usuario
-let overrides={}; // índice -> {categoria,numero,hora,local,visitante,cancha,jornada,eliminado}
+let JORNADAS=[...LEGACY_JORNADAS];
+let ligasDB=[];
+let temporadaDB=null;
+let relationalMode=false;
+let currentLigaId=null;
+let relationalMatchIds={};
+let relationalResultIds={};
+let relationalTeamIds={};
+let partidosExtra=[];
+let equiposExtra=[];
+let overrides={};
 let partidos=[...partidosBase];
 function rebuildPartidos(){ partidos = partidosBase.concat(partidosExtra); }
 
@@ -204,6 +259,9 @@ let dbInstance=null;
 let supabaseClient=null;
 let cloudEnabled=false;
 let cloudUser=null;
+let adminProfiles=[];
+let cloudRole="anon";
+let cloudPermissions={};
 let activeTab="partidos";
 let jornadaActiva="1";
 let editandoPartido=null;
@@ -251,6 +309,41 @@ function setCloudStatus(text,ok=false){
 function getCloudConfig(){
   return {url:(localStorage.getItem("hockey_sb_url")||document.getElementById("sbUrl")?.value||"").trim(),key:(localStorage.getItem("hockey_sb_key")||document.getElementById("sbKey")?.value||"").trim()};
 }
+async function cargarRolUsuario(){
+  cloudRole=cloudUser?"user":"anon";
+  cloudPermissions={};
+  if(!cloudUser||!supabaseClient){actualizarPermisosUI();return;}
+  try{
+    const {data,error}=await supabaseClient.from("perfiles").select("rol,activo,nombre,email").eq("id",cloudUser.id).maybeSingle();
+    if(!error && data?.activo!==false && data?.rol) cloudRole=data.rol;
+    if(cloudRole!=="admin" && currentLigaId){
+      const {data:p}=await supabaseClient.from("liga_usuarios").select("puede_ver_partidos,puede_ver_resultados,puede_ver_tabla,puede_ver_dashboard,puede_ver_reporte,puede_gestionar_partidos,puede_gestionar_resultados").eq("usuario_id",cloudUser.id).eq("liga_id",currentLigaId).maybeSingle();
+      if(p) cloudPermissions=p;
+    }
+  }catch(e){console.warn("No se pudo cargar el rol/permisos:",e.message);}
+  actualizarPermisosUI();
+}
+function puede(permiso){
+  if(cloudRole==="admin") return true;
+  if(cloudRole==="anon") return permiso==="puede_ver_resultados" || permiso==="puede_ver_tabla";
+  return cloudPermissions[permiso]===true;
+}
+function actualizarPermisosUI(){
+  const adminEls=document.querySelectorAll(".solo-admin");
+  adminEls.forEach(e=>e.style.display=cloudRole==="admin"?"":"none");
+  const checks={
+    partidos:puede("puede_ver_partidos"),resultados:puede("puede_ver_resultados"),tabla:puede("puede_ver_tabla"),dashboard:puede("puede_ver_dashboard"),reporte:puede("puede_ver_reporte")
+  };
+  document.querySelectorAll(".navbtn[data-tab]").forEach(b=>{ if(checks[b.dataset.tab]!==undefined) b.style.display=checks[b.dataset.tab]?"":"none"; });
+  const reportBtn=document.getElementById("btnReporte"); if(reportBtn)reportBtn.style.display=checks.reporte?"":"none";
+  const writeEls=document.querySelectorAll(".solo-gestion-partidos"); writeEls.forEach(e=>e.style.display=puede("puede_gestionar_partidos")?"":"none");
+  const resultEls=document.querySelectorAll(".solo-gestion-resultados"); resultEls.forEach(e=>e.style.display=puede("puede_gestionar_resultados")?"":"none");
+  const loginBtn=document.getElementById("btnLogin"); if(loginBtn){loginBtn.style.display="";loginBtn.textContent=cloudUser?"🚪 Cerrar sesión":"🔐 Iniciar sesión";}
+  if(cloudRole==="anon" && !checks[activeTab]) activeTab="tabla";
+  const roleLabel=document.getElementById("roleInfo"); if(roleLabel) roleLabel.textContent=cloudRole==="admin"?"👑 Administrador · acceso total":cloudRole==="user"?"👤 Usuario · permisos asignados":"👁️ Visitante · solo consulta pública";
+}
+
+
 async function configureCloud(){
   const url=document.getElementById("sbUrl").value.trim();
   const key=document.getElementById("sbKey").value.trim();
@@ -261,7 +354,8 @@ async function configureCloud(){
     cloudEnabled=true;
     const {data}=await supabaseClient.auth.getSession();
     cloudUser=data?.session?.user||null;
-    setCloudStatus(cloudUser?"☁️ Conectado · Administrador":"☁️ Conectado · Solo lectura",!!cloudUser);
+    setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);
+    await cargarRolUsuario();
     toast("Supabase conectado ✓");
     await downloadCloudToLocal(true);
   }catch(e){cloudEnabled=false;setCloudStatus("Error de conexión");alert("No se pudo conectar a Supabase: "+e.message);}
@@ -273,26 +367,101 @@ async function initCloud(){
     supabaseClient=window.supabase.createClient(c.url,c.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
     cloudEnabled=true;
     const {data}=await supabaseClient.auth.getSession(); cloudUser=data?.session?.user||null;
-    setCloudStatus(cloudUser?"☁️ Conectado · Administrador":"☁️ Conectado · Solo lectura",!!cloudUser);
-    supabaseClient.auth.onAuthStateChange((_event,session)=>{cloudUser=session?.user||null;setCloudStatus(cloudUser?"☁️ Conectado · Administrador":"☁️ Conectado · Solo lectura",!!cloudUser);});
+    setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);
+    await cargarRolUsuario();
+    supabaseClient.auth.onAuthStateChange(async (_event,session)=>{cloudUser=session?.user||null;setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);await cargarRolUsuario();});
     await downloadCloudToLocal(true);
   }catch(e){cloudEnabled=false;setCloudStatus("Modo local · error de conexión");}
 }
+async function recargarUsuariosAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient){alert("Solo el administrador puede gestionar usuarios.");return;}
+  await renderUsuariosAdmin();
+  toast("Usuarios actualizados ✓");
+}
+async function renderUsuariosAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient)return;
+  const [u,l]=await Promise.all([
+    supabaseClient.from("perfiles").select("id,email,nombre,rol,activo").order("email"),
+    supabaseClient.from("ligas").select("id,nombre,departamento,estado").order("nombre")
+  ]);
+  if(u.error){alert("No se pudieron cargar los usuarios: "+u.error.message);return;}
+  if(l.error){alert("No se pudieron cargar las ligas: "+l.error.message);return;}
+  adminProfiles=u.data||[];
+  const us=document.getElementById("adminUserSelect"), ls=document.getElementById("adminLigaSelect");
+  if(!us||!ls)return;
+  us.innerHTML=adminProfiles.map(x=>`<option value="${x.id}">${escapeAttr(x.email||x.nombre||x.id)}${x.rol==="admin"?" · ADMIN":""}${x.activo===false?" · INACTIVO":""}</option>`).join("") || '<option value="">No hay perfiles</option>';
+  ls.innerHTML=(l.data||[]).map(x=>`<option value="${x.id}">${escapeAttr(x.nombre)} — ${escapeAttr(x.departamento||"")}</option>`).join("") || '<option value="">No hay ligas</option>';
+  cargarPermisosAdmin();
+  const asignaciones=await supabaseClient.from("liga_usuarios").select("liga_id,usuario_id,puede_ver_partidos,puede_ver_resultados,puede_ver_tabla,puede_ver_dashboard,puede_ver_reporte,puede_gestionar_partidos,puede_gestionar_resultados");
+  const lm=Object.fromEntries((l.data||[]).map(x=>[x.id,x.nombre]));
+  const um=Object.fromEntries(adminProfiles.map(x=>[x.id,x.email||x.nombre||x.id]));
+  if(asignaciones.error){document.getElementById("adminUsersTable").innerHTML='<p class="muted">No se pudieron cargar las asignaciones.</p>';return;}
+  document.getElementById("adminUsersTable").innerHTML=`<h3>Accesos por liga</h3><table><tr><th>Usuario</th><th>Liga</th><th>Permisos</th></tr>${(asignaciones.data||[]).map(a=>`<tr><td>${escapeAttr(um[a.usuario_id]||a.usuario_id)}</td><td>${escapeAttr(lm[a.liga_id]||a.liga_id)}</td><td class="small">${[a.puede_ver_partidos&&"Partidos",a.puede_ver_resultados&&"Resultados",a.puede_ver_tabla&&"Tabla",a.puede_ver_dashboard&&"Dashboard",a.puede_ver_reporte&&"Reporte",a.puede_gestionar_partidos&&"Gestiona partidos",a.puede_gestionar_resultados&&"Gestiona resultados"].filter(Boolean).join(" · ")||"Sin permisos"}</td></tr>`).join("")||'<tr><td colspan="3">No hay accesos asignados.</td></tr>'}</table>`;
+}
+async function cargarPermisosAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient)return;
+  const uid=document.getElementById("adminUserSelect")?.value, lid=document.getElementById("adminLigaSelect")?.value;
+  if(!uid||!lid)return;
+  const profile=adminProfiles.find(x=>x.id===uid);
+  const meta=document.getElementById("adminUserMeta"); if(meta)meta.textContent=`${profile?.email||""} · ID: ${uid}`;
+  const roleEl=document.getElementById("adminRoleSelect"); if(roleEl)roleEl.value=profile?.rol||"user";
+  const activeEl=document.getElementById("adminActivo"); if(activeEl)activeEl.checked=profile?.activo!==false;
+  const r=await supabaseClient.from("liga_usuarios").select("puede_ver_partidos,puede_ver_resultados,puede_ver_tabla,puede_ver_dashboard,puede_ver_reporte,puede_gestionar_partidos,puede_gestionar_resultados").eq("usuario_id",uid).eq("liga_id",lid).maybeSingle();
+  if(r.error){alert("No se pudieron cargar los permisos: "+r.error.message);return;}
+  const p=r.data||{};
+  ["partidos","resultados","tabla","dashboard","reporte"].forEach(k=>{const el=document.getElementById("perm_"+k);if(el)el.checked=p["puede_ver_"+k]===true;});
+  document.getElementById("perm_gestion_partidos").checked=p.puede_gestionar_partidos===true;
+  document.getElementById("perm_gestion_resultados").checked=p.puede_gestionar_resultados===true;
+}
+async function guardarPerfilAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient){alert("Solo el administrador puede modificar perfiles.");return;}
+  const id=document.getElementById("adminUserSelect")?.value;
+  if(!id)return;
+  const rol=document.getElementById("adminRoleSelect").value;
+  const activo=document.getElementById("adminActivo").checked;
+  if(id===cloudUser?.id && rol!=="admin"){alert("No puedes quitarte el rol de administrador desde tu propia sesión.");return;}
+  const r=await supabaseClient.from("perfiles").update({rol,activo}).eq("id",id);
+  if(r.error){alert("No se pudo actualizar el perfil: "+r.error.message);return;}
+  await renderUsuariosAdmin(); toast("Perfil actualizado ✓");
+}
+
+async function guardarPermisosAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient){alert("Solo el administrador puede guardar permisos.");return;}
+  const usuario_id=document.getElementById("adminUserSelect")?.value, liga_id=document.getElementById("adminLigaSelect")?.value;
+  if(!usuario_id||!liga_id)return;
+  const payload={liga_id,usuario_id,puede_ver_partidos:document.getElementById("perm_partidos").checked,puede_ver_resultados:document.getElementById("perm_resultados").checked,puede_ver_tabla:document.getElementById("perm_tabla").checked,puede_ver_dashboard:document.getElementById("perm_dashboard").checked,puede_ver_reporte:document.getElementById("perm_reporte").checked,puede_gestionar_partidos:document.getElementById("perm_gestion_partidos").checked,puede_gestionar_resultados:document.getElementById("perm_gestion_resultados").checked};
+  const r=await supabaseClient.from("liga_usuarios").upsert(payload,{onConflict:"liga_id,usuario_id"});
+  if(r.error){alert("No se pudieron guardar los permisos: "+r.error.message);return;}
+  await renderUsuariosAdmin(); toast("Permisos guardados ✓");
+}
+async function quitarAccesoLigaAdmin(){
+  if(cloudRole!=="admin"||!supabaseClient)return;
+  const usuario_id=document.getElementById("adminUserSelect")?.value, liga_id=document.getElementById("adminLigaSelect")?.value;
+  if(!usuario_id||!liga_id)return;
+  if(!confirm("¿Quitar el acceso de este usuario a la liga seleccionada?"))return;
+  const r=await supabaseClient.from("liga_usuarios").delete().eq("usuario_id",usuario_id).eq("liga_id",liga_id);
+  if(r.error){alert("No se pudo quitar el acceso: "+r.error.message);return;}
+  await renderUsuariosAdmin(); toast("Acceso quitado ✓");
+}
+
 async function cloudLogin(){
   if(!cloudEnabled){await configureCloud();if(!cloudEnabled)return;}
-  const email=prompt("Correo del administrador:"); if(!email)return;
+  const email=prompt("Correo de acceso:"); if(!email)return;
   const password=prompt("Contraseña:"); if(!password)return;
   const {error}=await supabaseClient.auth.signInWithPassword({email,password});
   if(error){alert("No se pudo iniciar sesión: "+error.message);return;}
-  toast("Sesión de administrador iniciada ✓");
+  await cargarRolUsuario();
+  if(cloudRole==="admin") await cargarLigasRelacionales();
+  toast(cloudRole==="admin"?"Sesión de administrador iniciada ✓":"Sesión de usuario iniciada ✓");
 }
-async function cloudLogout(){if(!supabaseClient)return;await supabaseClient.auth.signOut();toast("Sesión cerrada");}
+async function cloudLogout(){if(!supabaseClient)return;await supabaseClient.auth.signOut();cloudUser=null;cloudRole="anon";cloudPermissions={};actualizarPermisosUI();toast("Sesión cerrada");}
 function stateBlob(){return {datos,meta,partidosExtra,equiposExtra,overrides};}
 function applyState(x){
   if(!x)return;
   datos=x.datos||{};meta=x.meta||{ultimoRespaldo:null};partidosExtra=x.partidosExtra||[];equiposExtra=x.equiposExtra||[];overrides=x.overrides||{};rebuildPartidos();
 }
 async function uploadLocalToCloud(){
+  if(relationalMode){toast("La liga activa ya está sincronizada con la base de datos ✓");return;}
   if(!cloudEnabled){await configureCloud();if(!cloudEnabled)return;}
   if(!cloudUser){alert("Primero inicia sesión como administrador.");return;}
   const {error}=await supabaseClient.from("liga_estado").upsert({id:"principal",datos:stateBlob(),updated_at:new Date().toISOString()},{onConflict:"id"});
@@ -300,6 +469,7 @@ async function uploadLocalToCloud(){
   toast("Datos publicados en la web ✓");
 }
 async function downloadCloudToLocal(silent=false){
+  if(relationalMode&&currentLigaId){ const ok=await loadRelationalData(currentLigaId); if(ok&&!silent)toast("Datos relacionales cargados ✓"); return ok; }
   if(!cloudEnabled||!supabaseClient)return false;
   try{
     const {data,error}=await supabaseClient.from("liga_estado").select("datos,updated_at").eq("id","principal").maybeSingle();
@@ -308,6 +478,157 @@ async function downloadCloudToLocal(silent=false){
     if(!silent)toast("La nube todavía no tiene datos");
     return false;
   }catch(e){if(!silent)alert("No se pudieron cargar los datos de la nube: "+e.message);return false;}
+}
+
+async function loadRelationalData(ligaId){
+  if(!supabaseClient||!cloudEnabled) return false;
+  const {data:liga,error:e1}=await supabaseClient.from("ligas").select("id,nombre,departamento,estado").eq("id",ligaId).maybeSingle();
+  if(e1||!liga) return false;
+  const {data:temp,error:e2}=await supabaseClient.from("temporadas").select("id,nombre,anio,estado").eq("liga_id",ligaId).order("anio",{ascending:false}).limit(1).maybeSingle();
+  if(e2||!temp) return false;
+  const {data:jornadas,error:e3}=await supabaseClient.from("jornadas").select("id,numero,nombre,fecha,estado").eq("temporada_id",temp.id).order("numero",{ascending:true});
+  if(e3) return false;
+  const {data:equipos,error:e4}=await supabaseClient.from("equipos").select("id,nombre,categoria,genero,activo").eq("liga_id",ligaId).eq("activo",true).order("nombre");
+  if(e4) return false;
+  const {data:matches,error:e5}=await supabaseClient.from("partidos").select("id,categoria,numero,fecha,hora,cancha,estado,jornada_id,equipo_local_id,equipo_visitante_id").eq("liga_id",ligaId).eq("temporada_id",temp.id).order("jornada_id").order("hora");
+  if(e5) return false;
+  const teamById={}; (equipos||[]).forEach(e=>teamById[e.id]=e);
+  const ids=(matches||[]).map(m=>m.id);
+  let results=[];
+  if(ids.length){ const r=await supabaseClient.from("resultados").select("id,partido_id,goles_local,goles_visitante,amarillas_local,amarillas_visitante,rojas_local,rojas_visitante,finalizado").in("partido_id",ids); if(r.error)return false; results=r.data||[]; }
+  currentLigaId=liga.id; temporadaDB=temp; ligasDB=ligasDB.length?ligasDB:[];
+  JORNADAS=(jornadas||[]).map(j=>({id:j.id,label:j.nombre||(`Jornada ${j.numero}`),fecha:j.fecha||"",ronda:j.numero}));
+  relationalMatchIds={}; relationalResultIds={}; relationalTeamIds={};
+  (equipos||[]).forEach(e=>relationalTeamIds[e.nombre+"|"+(e.categoria||"")]=e.id);
+  partidos=(matches||[]).map((m,i)=>{ relationalMatchIds[i]=m.id; return [m.categoria,m.numero??String(i+1),String(m.hora||"07:00").slice(0,5),teamById[m.equipo_local_id]?.nombre||"",teamById[m.equipo_visitante_id]?.nombre||"",m.cancha||"1",m.jornada_id]; });
+  datos={};
+  (results||[]).forEach(r=>{const i=Object.keys(relationalMatchIds).find(k=>relationalMatchIds[k]===r.partido_id); if(i!==undefined){relationalResultIds[i]=r.id; datos[i]={local:r.goles_local||0,visitante:r.goles_visitante||0,amarillas:(r.amarillas_local||0)+(r.amarillas_visitante||0),rojas:(r.rojas_local||0)+(r.rojas_visitante||0),amarillas_local:r.amarillas_local||0,amarillas_visitante:r.amarillas_visitante||0,rojas_local:r.rojas_local||0,rojas_visitante:r.rojas_visitante||0,finalizado:!!r.finalizado,guardado:new Date().toISOString()};}});
+  partidosExtra=[]; equiposExtra=[]; overrides={}; jornadaActiva=JORNADAS[0]?.id||"";
+  relationalMode=true;
+  actualizarSelectorLiga(); actualizarCabeceraLiga(); actualizarModoDatos();
+  return true;
+}
+async function cargarLigasRelacionales(){
+  if(!supabaseClient||!cloudEnabled)return false;
+  const r=await supabaseClient.from("ligas").select("id,nombre,departamento,estado").order("nombre");
+  if(r.error||!r.data?.length)return false;
+  ligasDB=r.data; actualizarSelectorLiga();
+  const actual=currentLigaId||ligasDB.find(x=>/sonsonate/i.test(x.nombre+" "+x.departamento))?.id||ligasDB[0].id;
+  return await loadRelationalData(actual);
+}
+function actualizarSelectorLiga(){
+ const sel=document.getElementById("ligaSelect"); if(!sel)return;
+ if(!ligasDB.length){sel.innerHTML='<option value="">Sonsonate (local)</option>';return;}
+ sel.innerHTML=ligasDB.map(l=>`<option value="${l.id}">${escapeAttr(l.nombre)}${l.estado&&l.estado!=="activo"?` · ${l.estado}`:""}</option>`).join("");
+ if(currentLigaId)sel.value=currentLigaId;
+}
+function actualizarCabeceraLiga(){
+ const l=ligasDB.find(x=>x.id===currentLigaId);
+ const h=document.getElementById("leagueHeader"),s=document.getElementById("seasonInfo");
+ const nombreLiga=l?.nombre||"Liga 2026 Juvenil de Hockey";
+ const departamento=l?.departamento||"Departamento de Sonsonate";
+ if(h)h.textContent=`${departamento} · ${nombreLiga}`;
+ if(s)s.textContent=`Temporada ${temporadaDB?.anio||"2026"}`;
+ const titulos={
+   tituloPartidos:`Partidos — ${nombreLiga}`,
+   tituloResultados:`📊 Resultados — ${nombreLiga}`,
+   tituloTabla:`🏆 Tabla de posiciones — ${nombreLiga}`,
+   tituloDashboard:`📊 Dashboard — ${nombreLiga}`,
+   tituloHistorial:`🔎 Historial — ${nombreLiga}`
+ };
+ Object.entries(titulos).forEach(([id,texto])=>{const el=document.getElementById(id);if(el)el.textContent=texto;});
+}
+function actualizarModoDatos(){const x=document.getElementById("dataMode");if(x)x.textContent=relationalMode?"☁️ Datos relacionales · liga independiente":"💾 Modo compatible con la versión anterior";}
+async function cambiarLiga(id){ if(!id)return; if(!relationalMode||!supabaseClient){alert("Primero conecta Supabase y ejecuta la migración de la Fase 1.");return;} if(id===currentLigaId)return; const ok=await loadRelationalData(id); if(!ok){alert("No se pudieron cargar los datos de esta liga.");return;} await cargarRolUsuario(); editandoPartido=null; render(); }
+async function agregarLiga(){
+ if(!cloudEnabled||!supabaseClient){alert("Primero conecta Supabase.");return;}
+ if(!cloudUser||cloudRole!=="admin"){alert("Solo el administrador puede crear ligas.");return;}
+ const nombre=prompt("Nombre de la liga:");
+ if(!nombre||!nombre.trim())return;
+ const departamento=prompt("Departamento:");
+ if(!departamento||!departamento.trim())return;
+ const anio=parseInt(prompt("Año de la temporada inicial:","2026"),10);
+ if(!Number.isInteger(anio)||anio<2000||anio>2100){alert("Año de temporada inválido.");return;}
+ const estado="activo";
+ const existe=ligasDB.some(l=>l.nombre.trim().toLowerCase()===nombre.trim().toLowerCase() && (l.departamento||"").trim().toLowerCase()===(departamento||"").trim().toLowerCase());
+ if(existe){alert("Ya existe una liga con ese nombre y departamento.");return;}
+ const rLiga=await supabaseClient.from("ligas").insert({nombre:nombre.trim(),departamento:departamento.trim(),estado,fecha_creacion:new Date().toISOString()}).select("id,nombre,departamento,estado").single();
+ if(rLiga.error){alert("No se pudo crear la liga: "+rLiga.error.message);return;}
+ const liga=rLiga.data;
+ const rTemp=await supabaseClient.from("temporadas").insert({liga_id:liga.id,nombre:"Temporada "+anio,anio,estado:"activa",fecha_creacion:new Date().toISOString()}).select("id,nombre,anio,estado").single();
+ if(rTemp.error){
+   await supabaseClient.from("ligas").delete().eq("id",liga.id);
+   alert("La liga fue creada pero no se pudo crear su temporada. Se revirtió la creación: "+rTemp.error.message);
+   return;
+ }
+ ligasDB.push(liga);
+ actualizarSelectorLiga();
+ currentLigaId=liga.id;
+ temporadaDB=rTemp.data;
+ const ok=await loadRelationalData(liga.id);
+ if(!ok){alert("La liga se creó, pero no se pudo cargar. Puedes volver a seleccionarla.");return;}
+ render();
+ toast("Liga y temporada creadas ✓");
+}
+async function actualizarLiga(){
+ if(!relationalMode||!currentLigaId||!supabaseClient){alert("Selecciona una liga de la base multiliga.");return;}
+ if(!cloudUser||cloudRole!=="admin"){alert("Solo el administrador puede actualizar ligas.");return;}
+ const liga=ligasDB.find(x=>x.id===currentLigaId);
+ if(!liga){alert("No se encontró la liga activa.");return;}
+ const nombre=prompt("Nombre de la liga:",liga.nombre||"");
+ if(nombre===null)return;
+ const departamento=prompt("Departamento:",liga.departamento||"");
+ if(departamento===null)return;
+ const anioActual=temporadaDB?.anio||new Date().getFullYear();
+ const anio=parseInt(prompt("Año de la temporada:",String(anioActual)),10);
+ if(!nombre.trim()||!departamento.trim()){alert("Nombre y departamento son obligatorios.");return;}
+ if(!Number.isInteger(anio)||anio<2000||anio>2100){alert("Año de temporada inválido.");return;}
+ const duplicada=ligasDB.some(l=>l.id!==currentLigaId&&l.nombre.trim().toLowerCase()===nombre.trim().toLowerCase()&&(l.departamento||"").trim().toLowerCase()===departamento.trim().toLowerCase());
+ if(duplicada){alert("Ya existe otra liga con ese nombre y departamento.");return;}
+ const rl=await supabaseClient.from("ligas").update({nombre:nombre.trim(),departamento:departamento.trim()}).eq("id",currentLigaId).select("id,nombre,departamento,estado").single();
+ if(rl.error){alert("No se pudo actualizar la liga: "+rl.error.message);return;}
+ if(temporadaDB?.id){
+   const rt=await supabaseClient.from("temporadas").update({anio,nombre:`Temporada ${anio}`}).eq("id",temporadaDB.id).select("id,nombre,anio,estado").single();
+   if(rt.error){alert("La liga se actualizó, pero no se pudo actualizar la temporada: "+rt.error.message);return;}
+   temporadaDB=rt.data;
+ }
+ ligasDB=ligasDB.map(l=>l.id===currentLigaId?rl.data:l);
+ actualizarSelectorLiga(); actualizarCabeceraLiga(); render(); toast("Liga actualizada ✓");
+}
+
+async function eliminarLiga(){
+ if(!relationalMode||!currentLigaId||!supabaseClient){alert("Selecciona una liga de la base multiliga.");return;}
+ if(!cloudUser||cloudRole!=="admin"){alert("Solo el administrador puede eliminar ligas.");return;}
+ const liga=ligasDB.find(x=>x.id===currentLigaId);
+ if(!liga)return;
+ const confirmar=confirm(`¿Eliminar la liga "${liga.nombre}"?\n\nSe eliminarán únicamente sus temporadas, jornadas, partidos, resultados y equipos. Las demás ligas no se tocarán.`);
+ if(!confirmar)return;
+ // Eliminación por liga activa, en orden, para evitar dependencias entre tablas.
+ const pm=await supabaseClient.from("partidos").select("id").eq("liga_id",currentLigaId);
+ if(pm.error){alert("No se pudieron consultar los partidos de la liga: "+pm.error.message);return;}
+ const ids=(pm.data||[]).map(x=>x.id);
+ if(ids.length){const rr=await supabaseClient.from("resultados").delete().in("partido_id",ids);if(rr.error){alert("No se pudieron eliminar los resultados: "+rr.error.message);return;}}
+ let r=await supabaseClient.from("partidos").delete().eq("liga_id",currentLigaId); if(r.error){alert("No se pudieron eliminar los partidos: "+r.error.message);return;}
+ if(temporadaDB?.id){r=await supabaseClient.from("jornadas").delete().eq("temporada_id",temporadaDB.id);if(r.error){alert("No se pudieron eliminar las jornadas: "+r.error.message);return;}}
+ r=await supabaseClient.from("equipos").delete().eq("liga_id",currentLigaId); if(r.error){alert("No se pudieron eliminar los equipos: "+r.error.message);return;}
+ r=await supabaseClient.from("temporadas").delete().eq("liga_id",currentLigaId); if(r.error){alert("No se pudieron eliminar las temporadas: "+r.error.message);return;}
+ r=await supabaseClient.from("ligas").delete().eq("id",currentLigaId); if(r.error){alert("No se pudo eliminar la liga: "+r.error.message);return;}
+ const eliminada=currentLigaId;
+ ligasDB=ligasDB.filter(l=>l.id!==eliminada);
+ currentLigaId=null; temporadaDB=null; JORNADAS=[]; partidos=[]; datos={}; relationalMatchIds={}; relationalResultIds={};
+ if(ligasDB.length){await loadRelationalData(ligasDB[0].id);}else{relationalMode=false;actualizarSelectorLiga();actualizarModoDatos();actualizarCabeceraLiga();}
+ render(); toast("Liga eliminada ✓");
+}
+
+async function agregarJornada(){
+ if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para administrar jornadas.");return;}
+ if(!relationalMode||!currentLigaId||!temporadaDB){alert("Esta función requiere la base de datos multiliga activa.");return;}
+ const numero=parseInt(prompt("Número de la nueva jornada:"),10); if(!numero||numero<1)return;
+ const nombre=prompt("Nombre de la jornada:",`Jornada ${numero}`)||`Jornada ${numero}`;
+ const fecha=prompt("Fecha (YYYY-MM-DD):",""); if(!/^\d{4}-\d{2}-\d{2}$/.test(fecha)){alert("Fecha inválida. Usa YYYY-MM-DD.");return;}
+ const r=await supabaseClient.from("jornadas").insert({temporada_id:temporadaDB.id,numero,nombre,fecha,estado:"abierta"}).select("id,numero,nombre,fecha,estado").single();
+ if(r.error){alert("No se pudo crear la jornada: "+r.error.message);return;}
+ JORNADAS.push({id:r.data.id,label:r.data.nombre,fecha:r.data.fecha,ronda:r.data.numero}); JORNADAS.sort((a,b)=>a.ronda-b.ronda); jornadaActiva=r.data.id; render(); toast("Jornada creada ✓");
 }
 
 async function loadAll(){
@@ -329,13 +650,17 @@ async function loadAll(){
   equiposExtra=equiposExtra.map(e=>({...e,nombre:normalizarNombre(e.nombre)}));
   Object.values(overrides).forEach(o=>{if(o.local)o.local=normalizarNombre(o.local);if(o.visitante)o.visitante=normalizarNombre(o.visitante);});
   rebuildPartidos();
+  actualizarPermisosUI();
   await initCloud();
+  if(cloudEnabled){
+    try{ await cargarLigasRelacionales(); }catch(e){ console.warn("Modo relacional no disponible todavía:",e.message); relationalMode=false; actualizarModoDatos(); }
+  }
 }
 async function save(cloud=true){
   let blob={datos,meta,partidosExtra,equiposExtra,overrides};
   localStorage.setItem(KEY,JSON.stringify(blob)); // respaldo síncrono inmediato
   await idbSet(KEY,blob); // almacenamiento principal, más espacio y más robusto
-  if(cloud && cloudEnabled && cloudUser){
+  if(cloud && cloudEnabled && cloudUser && !relationalMode){
     const {error}=await supabaseClient.from("liga_estado").upsert({id:"principal",datos:blob,updated_at:new Date().toISOString()},{onConflict:"id"});
     if(error) console.warn("No se pudo sincronizar con la nube:",error.message);
   }
@@ -344,8 +669,11 @@ async function save(cloud=true){
 function toast(t){let x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800);}
 
 function show(id){
+  if(cloudRole!=="admin" && !puede("puede_ver_"+id)){
+    if(cloudRole==="anon" && (id==="resultados" || id==="tabla")){} else { id="tabla"; }
+  }
   activeTab=id;
-  ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
+  ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
   document.querySelectorAll(".navbtn[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
   render();
 }
@@ -395,6 +723,7 @@ function listaEquipos(){
  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
 }
 function renderEquiposPanel(){
+ if(cloudRole!=="admin") return "";
  equiposListado=listaEquipos();
  let h=`<div class="card equipos-panel" style="grid-column:1/-1">
  <div class="meta"><b>🧑‍🤝‍🧑 Equipos</b><span class="muted"> · actualizar, eliminar o agregar equipos</span></div>
@@ -411,11 +740,17 @@ function renderEquiposPanel(){
  return h;
 }
 async function renombrarEquipoIndex(idx){
+ if(cloudRole!=="admin"){alert("Solo el administrador puede modificar equipos.");return;}
  let oldName=equiposListado[idx];
  let nuevo=prompt("Nuevo nombre para:\n"+oldName,oldName);
  if(nuevo===null) return;
  nuevo=nuevo.trim();
  if(!nuevo||nuevo===oldName) return;
+ if(relationalMode){
+   const keys=Object.keys(relationalTeamIds).filter(k=>k.startsWith(oldName+"|"));
+   for(const k of keys){ const id=relationalTeamIds[k]; const r=await supabaseClient.from("equipos").update({nombre:nuevo}).eq("id",id); if(r.error){alert("No se pudo renombrar el equipo: "+r.error.message);return;} }
+   await loadRelationalData(currentLigaId); render(); toast("Equipo renombrado ✓"); return;
+ }
  equiposExtra.forEach(e=>{if(e.nombre===oldName)e.nombre=nuevo;});
  partidos.forEach((base,i)=>{
    if(estaEliminado(i)) return;
@@ -431,15 +766,22 @@ async function renombrarEquipoIndex(idx){
 }
 
 async function agregarEquipo(){
+ if(cloudRole!=="admin"){alert("Solo el administrador puede agregar equipos.");return;}
   let nombre=document.getElementById("nuevoEquipoNombre").value.trim();
   let categoria=document.getElementById("nuevoEquipoCategoria").value;
   if(!nombre||!categoria){alert("Escribe el nombre y selecciona la categoría.");return;}
   if(listaEquipos().some(e=>e.toLowerCase()===nombre.toLowerCase())){alert("Ese equipo ya existe.");return;}
+  if(relationalMode){
+    const r=await supabaseClient.from("equipos").insert({liga_id:currentLigaId,nombre,categoria,activo:true}).select("id").single();
+    if(r.error){alert("No se pudo agregar el equipo: "+r.error.message);return;}
+    await loadRelationalData(currentLigaId); render(); toast("Equipo agregado ✓"); return;
+  }
   equiposExtra.push({nombre,categoria});
   await save(); render(); toast("Equipo agregado ✓");
 }
 
 async function eliminarEquipoIndex(idx){
+ if(cloudRole!=="admin"){alert("Solo el administrador puede eliminar equipos.");return;}
   let nombre=equiposListado[idx];
   if(!nombre) return;
   let relacionados=partidosActivos().filter(({p})=>p[3]===nombre||p[4]===nombre);
@@ -456,6 +798,7 @@ function renderJornadaTabs(){
  JORNADAS.forEach(j=>{
    h+=`<button class="${jornadaActiva===j.id?'active':''}" onclick="cambiarJornada('${j.id}')">${j.label}</button>`;
  });
+ if(relationalMode && puede("puede_gestionar_partidos")) h+=`<button class="success" onclick="agregarJornada()">➕ Nueva jornada</button>`;
  h+=`</div>`;
  return h;
 }
@@ -491,8 +834,8 @@ function renderMatches(){
      ${done?`<div class="score">${d.local} — ${d.visitante}</div>
      <div class="small muted" style="text-align:center">🟨 ${am} &nbsp; 🟥 ${roj}</div>
      <span class="status">✓ Guardado</span>
-     <div class="actions"><button onclick="edit(${i})">Editar resultado</button><button class="danger" onclick="removeMatch(${i})">Borrar resultado</button></div>`
-     :`<div class="row">
+     <div class="actions solo-gestion-resultados"><button onclick="edit(${i})">Editar resultado</button><button class="danger" onclick="removeMatch(${i})">Borrar resultado</button></div>`
+     :puede("puede_gestionar_resultados")?`<div class="row">
          <div><label class="small muted">Goles local</label><input id="l${i}" type="number" min="0" value="0" aria-label="goles local"></div>
          <div><label class="small muted">Goles visitante</label><input id="v${i}" type="number" min="0" value="0" aria-label="goles visitante"></div>
        </div>
@@ -500,14 +843,14 @@ function renderMatches(){
          <div><label class="small muted">🟨 Amarillas</label><input id="a${i}" type="number" min="0" value="0" aria-label="tarjetas amarillas"></div>
          <div><label class="small muted">🟥 Rojas</label><input id="r${i}" type="number" min="0" value="0" aria-label="tarjetas rojas"></div>
        </div>
-     <div class="actions"><button class="success" onclick="saveMatch(${i})">Guardar resultado</button></div>`}
+     <div class="actions"><button class="success" onclick="saveMatch(${i})">Guardar resultado</button></div>`:`<span class="muted">Resultado pendiente</span>`}
      <div class="actions" style="border-top:1px dashed #eee;padding-top:8px;margin-top:8px">
-       <button onclick="iniciarEdicionPartido(${i})">✏️ Editar partido</button>
-       <button class="danger" onclick="eliminarPartido(${i})">🗑️ Eliminar partido</button>
+       <button class="solo-gestion-partidos" onclick="iniciarEdicionPartido(${i})">✏️ Editar partido</button>
+       <button class="danger solo-gestion-partidos" onclick="eliminarPartido(${i})">🗑️ Eliminar partido</button>
      </div>
      </div>`;
    });
-   html+=`<div class="card" style="border-style:dashed;border-color:#94a3b8">
+   if(puede("puede_gestionar_partidos"))    html+=`<div class="card" style="border-style:dashed;border-color:#94a3b8">
    <div class="meta"><b>➕ Agregar partido</b><span class="muted"> · ${cat}</span></div>
    <div class="row">
      <div><label class="small muted">Hora</label><input id="newHora_${slug}" type="time"></div>
@@ -525,6 +868,7 @@ function renderMatches(){
  document.getElementById("matchList").innerHTML=html;
 }
 async function agregarPartido(cat){
+ if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para crear partidos.");return;}
  let slug=slugCat(cat);
  let hora=document.getElementById("newHora_"+slug).value.trim();
  let cancha=document.getElementById("newCancha_"+slug).value.trim()||"1";
@@ -534,6 +878,16 @@ async function agregarPartido(cat){
  if(local===visitante){alert("El equipo local y visitante no pueden ser el mismo.");return;}
  if(!hora){alert("Selecciona la hora del partido.");return;}
  let numExistentes=partidosActivos().filter(x=>x.p[0]===cat && (x.p[6]||"1")===jornadaActiva).length;
+ if(relationalMode){
+   const et=await supabaseClient.from("equipos").select("id,nombre,categoria").eq("liga_id",currentLigaId).eq("activo",true);
+   if(et.error){alert("No se pudieron consultar los equipos: "+et.error.message);return;}
+   const el=et.data.find(e=>e.nombre===local&&e.categoria===cat), ev=et.data.find(e=>e.nombre===visitante&&e.categoria===cat);
+   if(!el||!ev){alert("Los equipos deben existir en la liga activa y pertenecer a la categoría seleccionada.");return;}
+   const j=JORNADAS.find(x=>x.id===jornadaActiva);
+   const r=await supabaseClient.from("partidos").insert({liga_id:currentLigaId,temporada_id:temporadaDB.id,jornada_id:jornadaActiva,categoria:cat,numero:numExistentes+1,equipo_local_id:el.id,equipo_visitante_id:ev.id,fecha:j?.fecha||null,hora,cancha,estado:"programado"}).select("id").single();
+   if(r.error){alert("No se pudo agregar el partido: "+r.error.message);return;}
+   await loadRelationalData(currentLigaId); render(); toast("Partido agregado ✓"); return;
+ }
  partidosExtra.push([cat,String(numExistentes+1),hora,local,visitante,cancha,jornadaActiva]);
  rebuildPartidos();
  await save();
@@ -541,14 +895,21 @@ async function agregarPartido(cat){
  toast("Partido agregado ✓");
 }
 async function saveMatch(i){
+ if(!puede("puede_gestionar_resultados")){alert("No tienes permiso para registrar resultados.");return;}
  let l=Math.max(0,parseInt(document.getElementById("l"+i).value)||0);
  let v=Math.max(0,parseInt(document.getElementById("v"+i).value)||0);
  let a=Math.max(0,parseInt(document.getElementById("a"+i).value)||0);
  let r=Math.max(0,parseInt(document.getElementById("r"+i).value)||0);
  datos[i]={local:l,visitante:v,amarillas:a,rojas:r,finalizado:true,guardado:new Date().toISOString()};
+ if(relationalMode&&relationalMatchIds[i]){
+   const payload={partido_id:relationalMatchIds[i],goles_local:l,goles_visitante:v,amarillas_local:a,amarillas_visitante:0,rojas_local:r,rojas_visitante:0,finalizado:true,fecha_actualizacion:new Date().toISOString()};
+   const rr=await supabaseClient.from("resultados").upsert(payload,{onConflict:"partido_id"});
+   if(rr.error){alert("No se pudo guardar en la base de datos: "+rr.error.message);return;}
+ }
  await save();render();toast("Resultado guardado ✓");
 }
 async function edit(i){
+ if(!puede("puede_gestionar_resultados")){alert("No tienes permiso para editar resultados.");return;}
  let d=datos[i]; datos[i].finalizado=false; await save(); render();
  setTimeout(()=>{
    document.getElementById("l"+i).value=d.local;
@@ -557,23 +918,42 @@ async function edit(i){
    document.getElementById("r"+i).value=d.rojas??0;
  },0);
 }
-async function removeMatch(i){if(confirm("¿Borrar este resultado?")){delete datos[i];await save();render();toast("Resultado eliminado");}}
+async function removeMatch(i){if(!puede("puede_gestionar_resultados")){alert("No tienes permiso para borrar resultados.");return;} if(confirm("¿Borrar este resultado?")){
+  if(relationalMode&&relationalResultIds[i]){const rr=await supabaseClient.from("resultados").delete().eq("id",relationalResultIds[i]);if(rr.error){alert("No se pudo borrar: "+rr.error.message);return;}}
+  delete datos[i];delete relationalResultIds[i];await save();render();toast("Resultado eliminado");
+}}
 
-function iniciarEdicionPartido(i){ editandoPartido=i; render(); }
+function iniciarEdicionPartido(i){ if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para editar partidos.");return;} editandoPartido=i; render(); }
 function cancelarEdicionPartido(){ editandoPartido=null; render(); }
 async function guardarEdicionPartido(i){
+ if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para editar partidos.");return;}
  let hora=document.getElementById("editHora_"+i).value.trim();
  let cancha=document.getElementById("editCancha_"+i).value.trim()||"1";
  let local=document.getElementById("editLocal_"+i).value.trim();
  let visitante=document.getElementById("editVisitante_"+i).value.trim();
  if(!local||!visitante){alert("Escribe el nombre de ambos equipos.");return;}
  if(!hora){alert("Selecciona la hora del partido.");return;}
+ if(relationalMode&&relationalMatchIds[i]){
+   const r=await supabaseClient.from("equipos").select("id,nombre,categoria").eq("liga_id",currentLigaId).eq("activo",true);
+   if(r.error){alert("No se pudieron consultar los equipos: "+r.error.message);return;}
+   const cat=partidos[i][0],el=r.data.find(e=>e.nombre===local&&e.categoria===cat),ev=r.data.find(e=>e.nombre===visitante&&e.categoria===cat);
+   if(!el||!ev){alert("Los equipos indicados no existen en la liga activa.");return;}
+   const u=await supabaseClient.from("partidos").update({hora,cancha,equipo_local_id:el.id,equipo_visitante_id:ev.id}).eq("id",relationalMatchIds[i]);
+   if(u.error){alert("No se pudo actualizar el partido: "+u.error.message);return;}
+   editandoPartido=null; await loadRelationalData(currentLigaId); render(); toast("Partido actualizado ✓"); return;
+ }
  overrides[i]={...(overrides[i]||{}),hora,cancha,local,visitante};
  editandoPartido=null;
  await save();render();toast("Partido actualizado ✓");
 }
 async function eliminarPartido(i){
+ if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para eliminar partidos.");return;}
  if(!confirm("¿Eliminar este partido y su resultado (si existe)?")) return;
+ if(relationalMode&&relationalMatchIds[i]){
+   const r=await supabaseClient.from("partidos").delete().eq("id",relationalMatchIds[i]);
+   if(r.error){alert("No se pudo eliminar el partido: "+r.error.message);return;}
+   await loadRelationalData(currentLigaId);render();toast("Partido eliminado");return;
+ }
  overrides[i]={...(overrides[i]||{}),eliminado:true};
  delete datos[i];
  await save();render();toast("Partido eliminado");
@@ -586,7 +966,7 @@ function renderResults(){
  let h="";
  Object.entries(groups).forEach(([cat,arr])=>{
    h+=`<h3>${cat}</h3><table><tr><th>Jornada</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th><th>🟨/🟥</th></tr>`;
-   arr.forEach(x=>h+=`<tr><td>${x.p[6]||"1"}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td><b>${x.d.local} – ${x.d.visitante}</b></td><td>${x.p[4]}</td><td>${x.d.amarillas??0} / ${x.d.rojas??0}</td></tr>`);
+   arr.forEach(x=>h+=`<tr><td>${JORNADAS.find(j=>j.id===x.p[6])?.label || x.p[6] || "1"}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td><b>${x.d.local} – ${x.d.visitante}</b></td><td>${x.p[4]}</td><td>${x.d.amarillas??0} / ${x.d.rojas??0}</td></tr>`);
    h+="</table>";
  });
  document.getElementById("results").innerHTML=h||"<p>Aún no hay resultados registrados.</p>";
@@ -693,7 +1073,7 @@ function renderHistorial(){
    h+=`<table><tr><th>Jornada</th><th>Categoría</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th><th>Estado</th></tr>`;
    filas.forEach(x=>{
      let estado=x.d?.finalizado?`<b>${x.d.local} – ${x.d.visitante}</b>`:'<span class="muted">Pendiente</span>';
-     h+=`<tr><td>${x.p[6]||"1"}</td><td>${x.p[0]}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td>${estado}</td><td>${x.p[4]}</td><td>${x.d?.finalizado?"✓ Jugado":"—"}</td></tr>`;
+     h+=`<tr><td>${JORNADAS.find(j=>j.id===x.p[6])?.label || x.p[6] || "1"}</td><td>${x.p[0]}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td>${estado}</td><td>${x.p[4]}</td><td>${x.d?.finalizado?"✓ Jugado":"—"}</td></tr>`;
    });
    h+="</table>";
  }
@@ -702,13 +1082,14 @@ function renderHistorial(){
 
 /* ---------- Reporte imprimible ---------- */
 function generarReporte(){
+ if(!puede("puede_ver_reporte")){alert("No tienes permiso para ver reportes.");return;}
  let activos=partidosActivos();
  let finalizados=activos.filter(x=>datos[x.i]?.finalizado).map(x=>datos[x.i]);
  let totalGoles=finalizados.reduce((s,d)=>s+d.local+d.visitante,0);
  let totalTarjetas=finalizados.reduce((s,d)=>s+(d.amarillas??0)+(d.rojas??0),0);
 
  let h=`<img src="${LOGOS_IMG_B64}" class="reporte-logos" alt="FESAHOCKEY · Liga 2026 Juvenil de Hockey · Juegos Deportivos Estudiantiles Nacionales">
- <p style="text-align:center" class="muted">Departamento de Sonsonate · Liga 2026 Juvenil de Hockey</p>
+ <p style="text-align:center" class="muted">${ligasDB.find(x=>x.id===currentLigaId)?.departamento||"Departamento de Sonsonate"} · ${ligasDB.find(x=>x.id===currentLigaId)?.nombre||"Liga 2026 Juvenil de Hockey"} · Temporada ${temporadaDB?.anio||"2026"}</p>
  <p><b>Partidos totales:</b> ${activos.length} &nbsp; | &nbsp; <b>Finalizados:</b> ${finalizados.length} &nbsp; | &nbsp; <b>Goles:</b> ${totalGoles} &nbsp; | &nbsp; <b>Tarjetas:</b> ${totalTarjetas}</p>`;
 
  CATEGORIAS.forEach(cat=>{
@@ -716,7 +1097,7 @@ function generarReporte(){
    activos.forEach(({p,i})=>{
      if(p[0]!==cat) return;
      let d=datos[i];
-     h+=`<tr><td>${p[6]||"1"}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
+     h+=`<tr><td>${JORNADAS.find(j=>j.id===p[6])?.label || p[6] || "1"}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
    });
    h+="</table><h4>Tabla de posiciones (acumulada)</h4>";
    let arr=calcularTabla(cat);
@@ -752,7 +1133,7 @@ async function descargarPDF(){
  let fecha=new Date().toISOString().slice(0,10);
  let opt={
    margin:10,
-   filename:`reporte_liga_hockey_${fecha}.pdf`,
+   filename:`reporte_${(ligasDB.find(x=>x.id===currentLigaId)?.nombre||"liga_hockey").toLowerCase().replace(/[^a-z0-9áéíóúñ]+/gi,"_").replace(/^_|_$/g,"")}_${fecha}.pdf`,
    image:{type:"jpeg",quality:0.98},
    html2canvas:{
      scale:2,
@@ -802,6 +1183,7 @@ function restore(e){
 
 /* ---------- Render general ---------- */
 function render(){
+ actualizarCabeceraLiga();
  renderMatches();
  renderResults();
  renderStandings();
