@@ -66,26 +66,46 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 .public-home-btn{min-height:105px;font-size:1.05rem;font-weight:700;border-radius:14px;cursor:pointer}
 .public-home-btn span{display:block;font-size:2rem;margin-bottom:8px}
 .public-only{display:none}
+.public-viewer-nav{max-width:900px;margin:10px auto;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.public-viewer-nav button{padding:9px 14px;border-radius:9px}
+body.booting #mainNav,body.booting #leagueBar,body.booting main section:not(#publicHome){display:none!important}
+body.booting #publicHome{display:block!important}
+body.booting #appTitle{font-size:0}
+body.booting #appTitle::after{content:"🏑 Liga de Hockey";font-size:1.5rem}
 @media(max-width:700px){.public-home-actions{grid-template-columns:1fr}.public-home-btn{min-height:82px}}
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="booting">
 <header>
-<h1>🏑 Control Administrativo — Hockey</h1>
+<h1 id="appTitle">🏑 Control Administrativo — Hockey</h1>
 <div id="leagueHeader">Departamento de Sonsonate · Liga 2026 Juvenil de Hockey</div>
 </header>
 <section id="publicHome" class="public-home">
   <h2>🏑 Liga de Hockey</h2>
-  <p class="muted">Consulta la información pública de la liga. Para administrar, inicia sesión.</p>
+  <p class="muted">Primero elige la liga que quieres consultar. Luego podrás ver sus tablas, resultados y dashboard.</p>
+  <div style="max-width:520px;margin:0 auto 22px;text-align:left">
+    <label for="publicLigaSelect"><b>🏆 Selecciona una liga</b></label>
+    <select id="publicLigaSelect" style="width:100%;font-size:1rem;padding:12px;border-radius:10px" onchange="seleccionarLigaPublica(this.value)">
+      <option value="">Cargando ligas...</option>
+    </select>
+  </div>
+  <div id="publicLeagueHint" class="muted" style="margin:-8px 0 18px">Selecciona una liga para continuar.</div>
   <div class="public-home-actions">
-    <button class="public-home-btn primary" onclick="entrarPublico('partidos')"><span>🏑</span>Ver partidos</button>
     <button class="public-home-btn success" onclick="entrarPublico('tabla')"><span>🏆</span>Ver tablas</button>
+    <button class="public-home-btn primary" onclick="entrarPublico('resultados')"><span>⚽</span>Ver resultados</button>
     <button class="public-home-btn" onclick="entrarPublico('dashboard')"><span>📊</span>Dashboard</button>
+    <button id="publicBack" class="public-home-btn hidden" onclick="volverInicioPublico()" style="min-height:54px;grid-column:1/-1"><span style="display:inline;font-size:1rem">←</span> Volver al inicio</button>
   </div>
 </section>
+<div id="publicViewerNav" class="public-viewer-nav hidden">
+  <button onclick="entrarPublico('tabla')">🏆 Tablas</button>
+  <button onclick="entrarPublico('resultados')">⚽ Resultados</button>
+  <button onclick="entrarPublico('dashboard')">📊 Dashboard</button>
+  <button onclick="volverInicioPublico()">⌂ Inicio</button>
+</div>
 <nav id="mainNav">
 <button class="navbtn" data-tab="partidos" onclick="show('partidos')">Partidos</button>
 <button class="navbtn" data-tab="resultados" onclick="show('resultados')">Resultados</button>
@@ -392,7 +412,7 @@ async function initCloud(){
     const {data}=await supabaseClient.auth.getSession(); cloudUser=data?.session?.user||null;
     setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);
     await cargarRolUsuario();
-    supabaseClient.auth.onAuthStateChange(async (_event,session)=>{cloudUser=session?.user||null;setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);await cargarRolUsuario();});
+    supabaseClient.auth.onAuthStateChange(async (_event,session)=>{cloudUser=session?.user||null;setCloudStatus(cloudUser?"☁️ Conectado":"☁️ Conectado · Solo lectura",!!cloudUser);await cargarRolUsuario();await cargarLigasRelacionales();actualizarVistaInicial();iniciarAutoActualizacion();});
     await downloadCloudToLocal(true);
   }catch(e){cloudEnabled=false;setCloudStatus("Modo local · error de conexión");}
 }
@@ -474,10 +494,12 @@ async function cloudLogin(){
   const {error}=await supabaseClient.auth.signInWithPassword({email,password});
   if(error){alert("No se pudo iniciar sesión: "+error.message);return;}
   await cargarRolUsuario();
-  if(cloudRole==="admin") await cargarLigasRelacionales();
+  await cargarLigasRelacionales();
+  actualizarVistaInicial();
+  iniciarAutoActualizacion();
   toast(cloudRole==="admin"?"Sesión de administrador iniciada ✓":"Sesión de usuario iniciada ✓");
 }
-async function cloudLogout(){if(!supabaseClient)return;await supabaseClient.auth.signOut();cloudUser=null;cloudRole="anon";cloudPermissions={};actualizarPermisosUI();toast("Sesión cerrada");}
+async function cloudLogout(){if(!supabaseClient)return;await supabaseClient.auth.signOut();cloudUser=null;cloudRole="anon";cloudPermissions={};actualizarPermisosUI();actualizarVistaInicial();iniciarAutoActualizacion();toast("Sesión cerrada");}
 function stateBlob(){return {datos,meta,partidosExtra,equiposExtra,overrides};}
 function applyState(x){
   if(!x)return;
@@ -544,6 +566,7 @@ function actualizarSelectorLiga(){
  if(!ligasDB.length){sel.innerHTML='<option value="">Sonsonate (local)</option>';return;}
  sel.innerHTML=ligasDB.map(l=>`<option value="${l.id}">${escapeAttr(l.nombre)}${l.estado&&l.estado!=="activo"?` · ${l.estado}`:""}</option>`).join("");
  if(currentLigaId)sel.value=currentLigaId;
+ actualizarSelectorLigaPublica();
 }
 function actualizarCabeceraLiga(){
  const l=ligasDB.find(x=>x.id===currentLigaId);
@@ -691,31 +714,84 @@ async function save(cloud=true){
 
 function toast(t){let x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800);}
 
-function entrarPublico(id){
-  const home=document.getElementById("publicHome");
-  if(home) home.style.display="none";
-  document.getElementById("mainNav").style.display="";
-  document.getElementById("leagueBar").style.display="";
-  show(id);
+function actualizarSelectorLigaPublica(){
+  const sel=document.getElementById("publicLigaSelect");
+  if(!sel)return;
+  if(!ligasDB.length){sel.innerHTML='<option value="">No hay ligas disponibles</option>';return;}
+  sel.innerHTML='<option value="">Selecciona una liga...</option>'+ligasDB.map(l=>`<option value="${l.id}">${escapeAttr(l.nombre)}${l.departamento?` — ${escapeAttr(l.departamento)}`:""}</option>`).join("");
+  if(currentLigaId)sel.value=currentLigaId;
+  const hint=document.getElementById("publicLeagueHint");
+  if(hint)hint.textContent=currentLigaId?`Liga seleccionada: ${ligasDB.find(l=>l.id===currentLigaId)?.nombre||""}`:"Selecciona una liga para continuar.";
 }
+async function seleccionarLigaPublica(id){
+  if(cloudRole!=="anon"||!id)return;
+  if(!supabaseClient){alert("No se pudo conectar con la base de datos.");return;}
+  const ok=await loadRelationalData(id);
+  if(!ok){alert("No se pudieron cargar los datos de esta liga.");return;}
+  actualizarSelectorLigaPublica();
+  actualizarCabeceraLiga();
+  toast("Liga seleccionada ✓");
+}
+
 function actualizarVistaInicial(){
   const home=document.getElementById("publicHome");
   const nav=document.getElementById("mainNav");
   const bar=document.getElementById("leagueBar");
+  const title=document.getElementById("appTitle");
   const esVisitante=cloudRole==="anon";
+  document.body.classList.remove("booting");
   if(home) home.style.display=esVisitante?"block":"none";
+  if(title) title.textContent=esVisitante?"🏑 Liga de Hockey":"🏑 Control Administrativo — Hockey";
   if(esVisitante){
     nav.style.display="none";
     bar.style.display="none";
+    actualizarSelectorLigaPublica();
+    document.getElementById("publicViewerNav")?.classList.add("hidden");
     ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x)?.classList.add("hidden"));
   }else{
+    document.getElementById("publicViewerNav")?.classList.add("hidden");
     nav.style.display="";
     bar.style.display="";
     const firstAllowed=cloudRole==="admin"?"dashboard":(puede("puede_ver_partidos")?"partidos":(puede("puede_ver_tabla")?"tabla":"dashboard"));
     show(firstAllowed);
   }
 }
+function entrarPublico(id){
+  const permitidos=["tabla","resultados","dashboard"];
+  if(cloudRole!=="anon" || !permitidos.includes(id)){actualizarVistaInicial();return;}
+  if(!currentLigaId){alert("Primero selecciona una liga.");return;}
+  const home=document.getElementById("publicHome");
+  if(home) home.style.display="none";
+  document.getElementById("mainNav").style.display="none";
+  document.getElementById("leagueBar").style.display="none";
+  document.getElementById("publicViewerNav")?.classList.remove("hidden");
+  permitidos.forEach(x=>document.getElementById(x)?.classList.toggle("hidden",x!==id));
+  document.getElementById("publicBack")?.classList.remove("hidden");
+  activeTab=id;
+  render();
+}
+function volverInicioPublico(){
+  if(cloudRole!=="anon") return;
+  const home=document.getElementById("publicHome");
+  if(home) home.style.display="block";
+  document.getElementById("publicViewerNav")?.classList.add("hidden");
+  document.getElementById("publicBack")?.classList.add("hidden");
+  ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x)?.classList.add("hidden"));
+  activeTab="tabla";
+}
+let autoRefreshTimer=null;
+async function refrescarDatosPublicos(){
+  if(!cloudEnabled||!supabaseClient||!currentLigaId||cloudRole==="admin"||editandoPartido!==null)return;
+  const ok=await loadRelationalData(currentLigaId);
+  if(ok) render();
+}
+function iniciarAutoActualizacion(){
+  clearInterval(autoRefreshTimer);
+  autoRefreshTimer=setInterval(refrescarDatosPublicos,15000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)refrescarDatosPublicos();});
+}
 function show(id){
+  if(cloudRole==="anon" && !["tabla","resultados","dashboard"].includes(id)) return;
   activeTab=id;
   ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
   document.querySelectorAll(".navbtn[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
@@ -1213,11 +1289,91 @@ async function backup(){
  render();
  toast("Respaldo creado ✓");
 }
+async function sincronizarRespaldoRelacional(){
+  if(!supabaseClient||!cloudUser||cloudRole!=="admin"||!currentLigaId) return 0;
+  const now=new Date().toISOString();
+  let enviados=0, creados=0;
+  // La base relacional es la fuente única: sincronizamos liga, temporada, jornadas,
+  // equipos, partidos y resultados del respaldo, no solo los resultados.
+  const {data:liga,error:le}=await supabaseClient.from("ligas").select("id,nombre,departamento,estado").eq("id",currentLigaId).maybeSingle();
+  if(le||!liga) throw new Error(le?.message||"No se encontró la liga activa");
+  let {data:temp,error:te}=await supabaseClient.from("temporadas").select("id,nombre,anio,estado").eq("liga_id",currentLigaId).order("anio",{ascending:false}).limit(1).maybeSingle();
+  if(te) throw new Error(te.message);
+  if(!temp){
+    const anio=Number(meta?.anio||new Date().getFullYear());
+    const ins=await supabaseClient.from("temporadas").insert({liga_id:currentLigaId,nombre:meta?.temporada||`Temporada ${anio}`,anio,estado:"activa"}).select("id,nombre,anio,estado").single();
+    if(ins.error) throw new Error(ins.error.message); temp=ins.data;
+  }
+  // Jornadas: crea las que vengan en el respaldo y reutiliza las existentes.
+  const jornadasByKey={};
+  const jr=await supabaseClient.from("jornadas").select("id,numero,nombre,fecha,estado").eq("temporada_id",temp.id);
+  if(jr.error) throw new Error(jr.error.message);
+  (jr.data||[]).forEach(j=>{jornadasByKey[String(j.id)]=j;jornadasByKey[`n:${j.numero}`]=j;jornadasByKey[`l:${String(j.nombre||"").toLowerCase()}`]=j;});
+  for(const j of (JORNADAS||[])){
+    let key=String(j.id||"");
+    if(!jornadasByKey[key] && j.ronda!=null) jornadasByKey[`n:${j.ronda}`]=jornadasByKey[`n:${j.ronda}`]||j;
+  }
+  async function getOrCreateJornada(raw){
+    const s=String(raw??"");
+    let j=jornadasByKey[s]||jornadasByKey[`l:${s.toLowerCase()}`]||jornadasByKey[`n:${s}`];
+    const local=JORNADAS.find(x=>String(x.id)===s||String(x.label).toLowerCase()===s.toLowerCase()||String(x.ronda)===s);
+    if(!j && local) j=jornadasByKey[String(local.id)];
+    if(j)return j;
+    const numero=Number(local?.ronda||s)||((Object.keys(jornadasByKey).filter(k=>k.startsWith("n:")).length)+1);
+    const payload={temporada_id:temp.id,numero,nombre:local?.label||`Jornada ${numero}`,fecha:local?.fecha||null,estado:"pendiente"};
+    const ins=await supabaseClient.from("jornadas").insert(payload).select("id,numero,nombre,fecha,estado").single();
+    if(ins.error) throw new Error(ins.error.message); j=ins.data;
+    jornadasByKey[String(j.id)]=j;jornadasByKey[`n:${j.numero}`]=j;jornadasByKey[`l:${String(j.nombre||"").toLowerCase()}`]=j;
+    creados++; return j;
+  }
+  // Equipos: reutiliza por nombre dentro de la liga y crea los que falten.
+  const tr=await supabaseClient.from("equipos").select("id,nombre,categoria,genero,activo").eq("liga_id",currentLigaId);
+  if(tr.error) throw new Error(tr.error.message);
+  const teamByKey={};
+  (tr.data||[]).forEach(e=>{teamByKey[`${String(e.nombre).toLowerCase()}|${String(e.categoria||"").toLowerCase()}`]=e;});
+  async function getOrCreateTeam(nombre,categoria){
+    const key=`${String(nombre||"").toLowerCase()}|${String(categoria||"").toLowerCase()}`;
+    if(teamByKey[key]) return teamByKey[key];
+    const ins=await supabaseClient.from("equipos").insert({liga_id:currentLigaId,nombre:String(nombre||"Sin nombre"),categoria:categoria||"General",activo:true}).select("id,nombre,categoria,genero,activo").single();
+    if(ins.error) throw new Error(ins.error.message); teamByKey[key]=ins.data; creados++; return ins.data;
+  }
+  const indices=[...Array(partidos.length).keys()];
+  for(const idx of indices){
+    if(estaEliminado(idx)) continue;
+    const p=getPartido(idx); if(!p||!p[3]||!p[4]) continue;
+    const jornada=await getOrCreateJornada(p[6]);
+    const categoria=p[0]||"General";
+    const local=await getOrCreateTeam(p[3],categoria);
+    const visitante=await getOrCreateTeam(p[4],categoria);
+    const existingId=relationalMatchIds[idx];
+    let matchId=existingId;
+    const payload={liga_id:currentLigaId,temporada_id:temp.id,jornada_id:jornada.id,categoria,numero:String(p[1]??idx+1),hora:String(p[2]||"07:00").slice(0,5),cancha:String(p[5]||"1"),estado:"programado",equipo_local_id:local.id,equipo_visitante_id:visitante.id};
+    if(matchId){
+      const up=await supabaseClient.from("partidos").update(payload).eq("id",matchId).select("id").single();
+      if(up.error) throw new Error(up.error.message);
+    }else{
+      const q=await supabaseClient.from("partidos").select("id").eq("jornada_id",jornada.id).eq("numero",String(payload.numero)).maybeSingle();
+      if(q.error) throw new Error(q.error.message);
+      if(q.data?.id){matchId=q.data.id; const up=await supabaseClient.from("partidos").update(payload).eq("id",matchId); if(up.error) throw new Error(up.error.message);}
+      else {const ins=await supabaseClient.from("partidos").insert(payload).select("id").single(); if(ins.error) throw new Error(ins.error.message); matchId=ins.data.id;}
+    }
+    relationalMatchIds[idx]=matchId;
+    const d=datos?.[idx];
+    if(d){
+      const rp={partido_id:matchId,goles_local:Number(d.local)||0,goles_visitante:Number(d.visitante)||0,amarillas_local:Number(d.amarillas_local??d.amarillas??0)||0,amarillas_visitante:Number(d.amarillas_visitante)||0,rojas_local:Number(d.rojas_local??d.rojas??0)||0,rojas_visitante:Number(d.rojas_visitante)||0,finalizado:!!d.finalizado,fecha_actualizacion:now};
+      const rr=await supabaseClient.from("resultados").upsert(rp,{onConflict:"partido_id"});
+      if(rr.error) throw new Error(rr.error.message); enviados++;
+    }
+  }
+  await cargarLigasRelacionales();
+  return enviados+creados;
+}
 function restore(e){
  let f=e.target.files[0];if(!f)return;
  let r=new FileReader();
  r.onload=async ()=>{
    try{
+     if(relationalMode && cloudRole!=="admin"){alert("En modo web, solo el administrador puede publicar un respaldo para todos.");e.target.value="";return;}
      let x=JSON.parse(r.result);
      datos=x.datos||x||{};
      meta=x.meta||meta;
@@ -1225,8 +1381,17 @@ function restore(e){
      equiposExtra=x.equiposExtra||[];
      overrides=x.overrides||{};
      rebuildPartidos();
-     await save();render();toast("Respaldo restaurado ✓");
-   }catch{alert("Archivo de respaldo no válido.");}
+     await save(false);
+     if(relationalMode){
+       const n=await sincronizarRespaldoRelacional();
+       toast(`Respaldo publicado ✓ ${n} resultado(s) sincronizado(s)`);
+     }else{
+       await save(true);
+       toast("Respaldo restaurado ✓");
+     }
+     render();
+   }catch(err){alert("No se pudo publicar el respaldo: "+(err?.message||"archivo no válido"));}
+   e.target.value="";
  };
  r.readAsText(f);
 }
@@ -1244,7 +1409,8 @@ function render(){
 (async function init(){
  await loadAll();
  actualizarPermisosUI();
- if(cloudRole!=="anon") show(cloudRole==="admin"?"dashboard":"partidos");
+ actualizarVistaInicial();
+ iniciarAutoActualizacion();
  render();
 })();
 </script>
