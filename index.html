@@ -74,11 +74,10 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 <button class="navbtn" data-tab="dashboard" onclick="show('dashboard')">📊 Dashboard</button>
 <button class="navbtn" data-tab="historial" onclick="show('historial')">🔎 Historial</button>
 <button id="btnReporte" class="navbtn" onclick="generarReporte()">📄 Reporte</button>
-<button class="navbtn solo-admin" onclick="backup()">💾 Respaldar</button>
-<button class="navbtn solo-admin" onclick="document.getElementById('restore').click()">📥 Restaurar</button>
+<button class="navbtn" onclick="backup()">💾 Respaldar</button>
+<button class="navbtn" onclick="document.getElementById('restore').click()">📥 Restaurar</button>
 <button class="navbtn solo-admin" onclick="show('usuariosAdmin');renderUsuariosAdmin()">👥 Usuarios y permisos</button>
-<button class="navbtn solo-admin" onclick="show('webConfig')">☁️ Web</button>
-<button id="btnLogin" class="navbtn" onclick="cloudUser?cloudLogout():cloudLogin()">🔐 Iniciar sesión</button>
+<button class="navbtn" onclick="show('webConfig')">☁️ Web</button>
 <input id="restore" type="file" accept=".json" class="hidden" onchange="restore(event)">
 </nav>
 <div id="leagueBar" class="panel" style="max-width:1100px;margin:12px auto 0;padding:12px">
@@ -306,8 +305,10 @@ function setCloudStatus(text,ok=false){
   el.style.background=ok?"#dcfce7":"#fef3c7";
   el.style.color=ok?"#166534":"#92400e";
 }
+const SUPABASE_DEFAULT_URL="https://boxcfnasemlpktiyqofq.supabase.co";
+const SUPABASE_DEFAULT_KEY="sb_publishable_h38Ilmq6o98gcYNgFX9LBw_M0c82jiM";
 function getCloudConfig(){
-  return {url:(localStorage.getItem("hockey_sb_url")||document.getElementById("sbUrl")?.value||"").trim(),key:(localStorage.getItem("hockey_sb_key")||document.getElementById("sbKey")?.value||"").trim()};
+  return {url:(localStorage.getItem("hockey_sb_url")||document.getElementById("sbUrl")?.value||SUPABASE_DEFAULT_URL).trim(),key:(localStorage.getItem("hockey_sb_key")||document.getElementById("sbKey")?.value||SUPABASE_DEFAULT_KEY).trim()};
 }
 async function cargarRolUsuario(){
   cloudRole=cloudUser?"user":"anon";
@@ -325,7 +326,7 @@ async function cargarRolUsuario(){
 }
 function puede(permiso){
   if(cloudRole==="admin") return true;
-  if(cloudRole==="anon") return permiso==="puede_ver_resultados" || permiso==="puede_ver_tabla";
+  if(cloudRole==="anon") return /^puede_ver_/.test(permiso);
   return cloudPermissions[permiso]===true;
 }
 function actualizarPermisosUI(){
@@ -338,11 +339,8 @@ function actualizarPermisosUI(){
   const reportBtn=document.getElementById("btnReporte"); if(reportBtn)reportBtn.style.display=checks.reporte?"":"none";
   const writeEls=document.querySelectorAll(".solo-gestion-partidos"); writeEls.forEach(e=>e.style.display=puede("puede_gestionar_partidos")?"":"none");
   const resultEls=document.querySelectorAll(".solo-gestion-resultados"); resultEls.forEach(e=>e.style.display=puede("puede_gestionar_resultados")?"":"none");
-  const loginBtn=document.getElementById("btnLogin"); if(loginBtn){loginBtn.style.display="";loginBtn.textContent=cloudUser?"🚪 Cerrar sesión":"🔐 Iniciar sesión";}
-  if(cloudRole==="anon" && !checks[activeTab]) activeTab="tabla";
   const roleLabel=document.getElementById("roleInfo"); if(roleLabel) roleLabel.textContent=cloudRole==="admin"?"👑 Administrador · acceso total":cloudRole==="user"?"👤 Usuario · permisos asignados":"👁️ Visitante · solo consulta pública";
 }
-
 
 async function configureCloud(){
   const url=document.getElementById("sbUrl").value.trim();
@@ -669,9 +667,6 @@ async function save(cloud=true){
 function toast(t){let x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800);}
 
 function show(id){
-  if(cloudRole!=="admin" && !puede("puede_ver_"+id)){
-    if(cloudRole==="anon" && (id==="resultados" || id==="tabla")){} else { id="tabla"; }
-  }
   activeTab=id;
   ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
   document.querySelectorAll(".navbtn[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));
@@ -966,7 +961,7 @@ function renderResults(){
  let h="";
  Object.entries(groups).forEach(([cat,arr])=>{
    h+=`<h3>${cat}</h3><table><tr><th>Jornada</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th><th>🟨/🟥</th></tr>`;
-   arr.forEach(x=>h+=`<tr><td>${JORNADAS.find(j=>j.id===x.p[6])?.label || x.p[6] || "1"}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td><b>${x.d.local} – ${x.d.visitante}</b></td><td>${x.p[4]}</td><td>${x.d.amarillas??0} / ${x.d.rojas??0}</td></tr>`);
+   arr.forEach(x=>h+=`<tr><td>${x.p[6]||"1"}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td><b>${x.d.local} – ${x.d.visitante}</b></td><td>${x.p[4]}</td><td>${x.d.amarillas??0} / ${x.d.rojas??0}</td></tr>`);
    h+="</table>";
  });
  document.getElementById("results").innerHTML=h||"<p>Aún no hay resultados registrados.</p>";
@@ -1073,7 +1068,7 @@ function renderHistorial(){
    h+=`<table><tr><th>Jornada</th><th>Categoría</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th><th>Estado</th></tr>`;
    filas.forEach(x=>{
      let estado=x.d?.finalizado?`<b>${x.d.local} – ${x.d.visitante}</b>`:'<span class="muted">Pendiente</span>';
-     h+=`<tr><td>${JORNADAS.find(j=>j.id===x.p[6])?.label || x.p[6] || "1"}</td><td>${x.p[0]}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td>${estado}</td><td>${x.p[4]}</td><td>${x.d?.finalizado?"✓ Jugado":"—"}</td></tr>`;
+     h+=`<tr><td>${etiquetaJornada(x.p[6])}</td><td>${x.p[0]}</td><td>${x.p[2]}</td><td>${x.p[3]}</td><td>${estado}</td><td>${x.p[4]}</td><td>${x.d?.finalizado?"✓ Jugado":"—"}</td></tr>`;
    });
    h+="</table>";
  }
@@ -1081,6 +1076,12 @@ function renderHistorial(){
 }
 
 /* ---------- Reporte imprimible ---------- */
+function etiquetaJornada(id){
+ const j=(JORNADAS||[]).find(x=>x.id===id);
+ if(j) return j.label || `Jornada ${j.ronda??""}`;
+ return id ? `Jornada ${id}` : "Jornada 1";
+}
+
 function generarReporte(){
  if(!puede("puede_ver_reporte")){alert("No tienes permiso para ver reportes.");return;}
  let activos=partidosActivos();
@@ -1097,7 +1098,7 @@ function generarReporte(){
    activos.forEach(({p,i})=>{
      if(p[0]!==cat) return;
      let d=datos[i];
-     h+=`<tr><td>${JORNADAS.find(j=>j.id===p[6])?.label || p[6] || "1"}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
+     h+=`<tr><td>${etiquetaJornada(p[6])}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
    });
    h+="</table><h4>Tabla de posiciones (acumulada)</h4>";
    let arr=calcularTabla(cat);
