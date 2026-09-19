@@ -58,6 +58,16 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
   main{margin:0;max-width:100%}
 }
 .reporte-logos{width:100%;max-width:700px;display:block;margin:0 auto 14px auto}
+
+.public-home{max-width:900px;margin:34px auto;padding:28px 18px;text-align:center}
+.public-home h2{font-size:1.8rem;margin:0 0 8px}
+.public-home p{margin:0 auto 24px;max-width:620px}
+.public-home-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.public-home-btn{min-height:105px;font-size:1.05rem;font-weight:700;border-radius:14px;cursor:pointer}
+.public-home-btn span{display:block;font-size:2rem;margin-bottom:8px}
+.public-only{display:none}
+@media(max-width:700px){.public-home-actions{grid-template-columns:1fr}.public-home-btn{min-height:82px}}
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -67,6 +77,15 @@ input[type="text"].search{width:100%;padding:11px;border:1px solid #ddd;border-r
 <h1>🏑 Control Administrativo — Hockey</h1>
 <div id="leagueHeader">Departamento de Sonsonate · Liga 2026 Juvenil de Hockey</div>
 </header>
+<section id="publicHome" class="public-home">
+  <h2>🏑 Liga de Hockey</h2>
+  <p class="muted">Consulta la información pública de la liga. Para administrar, inicia sesión.</p>
+  <div class="public-home-actions">
+    <button class="public-home-btn primary" onclick="entrarPublico('partidos')"><span>🏑</span>Ver partidos</button>
+    <button class="public-home-btn success" onclick="entrarPublico('tabla')"><span>🏆</span>Ver tablas</button>
+    <button class="public-home-btn" onclick="entrarPublico('dashboard')"><span>📊</span>Dashboard</button>
+  </div>
+</section>
 <nav id="mainNav">
 <button class="navbtn" data-tab="partidos" onclick="show('partidos')">Partidos</button>
 <button class="navbtn" data-tab="resultados" onclick="show('resultados')">Resultados</button>
@@ -340,6 +359,7 @@ function actualizarPermisosUI(){
   const writeEls=document.querySelectorAll(".solo-gestion-partidos"); writeEls.forEach(e=>e.style.display=puede("puede_gestionar_partidos")?"":"none");
   const resultEls=document.querySelectorAll(".solo-gestion-resultados"); resultEls.forEach(e=>e.style.display=puede("puede_gestionar_resultados")?"":"none");
   const roleLabel=document.getElementById("roleInfo"); if(roleLabel) roleLabel.textContent=cloudRole==="admin"?"👑 Administrador · acceso total":cloudRole==="user"?"👤 Usuario · permisos asignados":"👁️ Visitante · solo consulta pública";
+  actualizarVistaInicial();
 }
 
 async function configureCloud(){
@@ -671,6 +691,30 @@ async function save(cloud=true){
 
 function toast(t){let x=document.getElementById("toast");x.textContent=t;x.style.display="block";setTimeout(()=>x.style.display="none",1800);}
 
+function entrarPublico(id){
+  const home=document.getElementById("publicHome");
+  if(home) home.style.display="none";
+  document.getElementById("mainNav").style.display="";
+  document.getElementById("leagueBar").style.display="";
+  show(id);
+}
+function actualizarVistaInicial(){
+  const home=document.getElementById("publicHome");
+  const nav=document.getElementById("mainNav");
+  const bar=document.getElementById("leagueBar");
+  const esVisitante=cloudRole==="anon";
+  if(home) home.style.display=esVisitante?"block":"none";
+  if(esVisitante){
+    nav.style.display="none";
+    bar.style.display="none";
+    ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x)?.classList.add("hidden"));
+  }else{
+    nav.style.display="";
+    bar.style.display="";
+    const firstAllowed=cloudRole==="admin"?"dashboard":(puede("puede_ver_partidos")?"partidos":(puede("puede_ver_tabla")?"tabla":"dashboard"));
+    show(firstAllowed);
+  }
+}
 function show(id){
   activeTab=id;
   ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
@@ -1199,7 +1243,8 @@ function render(){
 
 (async function init(){
  await loadAll();
- document.querySelector('.navbtn[data-tab="partidos"]').classList.add("active");
+ actualizarPermisosUI();
+ if(cloudRole!=="anon") show(cloudRole==="admin"?"dashboard":"partidos");
  render();
 })();
 </script>
