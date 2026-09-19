@@ -343,8 +343,13 @@ function actualizarPermisosUI(){
 }
 
 async function configureCloud(){
-  const url=document.getElementById("sbUrl").value.trim();
-  const key=document.getElementById("sbKey").value.trim();
+  const cfg=getCloudConfig();
+  const url=cfg.url;
+  const key=cfg.key;
+  const urlInput=document.getElementById("sbUrl");
+  const keyInput=document.getElementById("sbKey");
+  if(urlInput) urlInput.value=url;
+  if(keyInput) keyInput.value=key;
   if(!/^https:\/\/[^\s]+supabase\.co/.test(url) || !key){alert("Ingresa una URL de Supabase válida y la clave publicable.");return;}
   localStorage.setItem("hockey_sb_url",url);localStorage.setItem("hockey_sb_key",key);
   try{
