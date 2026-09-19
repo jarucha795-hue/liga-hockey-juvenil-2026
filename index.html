@@ -98,6 +98,7 @@ body.booting #appTitle::after{content:"🏑 Liga de Hockey";font-size:1.5rem}
     <button class="public-home-btn primary" onclick="entrarPublico('resultados')"><span>⚽</span>Ver resultados</button>
     <button class="public-home-btn" onclick="entrarPublico('dashboard')"><span>📊</span>Dashboard</button>
     <button id="publicBack" class="public-home-btn hidden" onclick="volverInicioPublico()" style="min-height:54px;grid-column:1/-1"><span style="display:inline;font-size:1rem">←</span> Volver al inicio</button>
+    <button id="publicLoginBtn" class="public-home-btn" onclick="cloudLogin()" style="min-height:58px;grid-column:1/-1;background:#17324d;color:white"><span style="display:inline;font-size:1.15rem">🔐</span> Iniciar sesión como usuario o administrador</button>
   </div>
 </section>
 <div id="publicViewerNav" class="public-viewer-nav hidden">
@@ -746,9 +747,11 @@ function actualizarVistaInicial(){
     nav.style.display="none";
     bar.style.display="none";
     actualizarSelectorLigaPublica();
+    const loginBtn=document.getElementById("publicLoginBtn"); if(loginBtn) loginBtn.style.display="";
     document.getElementById("publicViewerNav")?.classList.add("hidden");
     ["partidos","resultados","tabla","dashboard","historial","reportePreview","webConfig","usuariosAdmin"].forEach(x=>document.getElementById(x)?.classList.add("hidden"));
   }else{
+    const loginBtn=document.getElementById("publicLoginBtn"); if(loginBtn) loginBtn.style.display="none";
     document.getElementById("publicViewerNav")?.classList.add("hidden");
     nav.style.display="";
     bar.style.display="";
