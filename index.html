@@ -1404,11 +1404,26 @@ async function descargarPDF(){
 /* ---------- Respaldo / restauración ---------- */
 async function backup(){
  const ligaActiva=ligasDB.find(l=>l.id===currentLigaId)||null;
+ if(relationalMode && !ligaActiva){
+   alert("No se puede crear el respaldo: no hay una liga activa seleccionada.");
+   return;
+ }
+ const fechaRespaldo=new Date().toISOString();
  const snapshot={
-   version:6,
-   fecha:new Date().toISOString(),
-   liga:ligaActiva?{nombre:ligaActiva.nombre,departamento:ligaActiva.departamento,estado:ligaActiva.estado}:null,
-   temporada:temporadaDB?{nombre:temporadaDB.nombre,anio:temporadaDB.anio,estado:temporadaDB.estado}:null,
+   version:7,
+   fecha:fechaRespaldo,
+   liga:ligaActiva?{
+     id:ligaActiva.id,
+     nombre:ligaActiva.nombre,
+     departamento:ligaActiva.departamento,
+     estado:ligaActiva.estado
+   }:null,
+   temporada:temporadaDB?{
+     id:temporadaDB.id||null,
+     nombre:temporadaDB.nombre,
+     anio:temporadaDB.anio,
+     estado:temporadaDB.estado
+   }:null,
    jornadas:Array.isArray(JORNADAS)?JORNADAS.map(j=>({...j})):[],
    partidos:Array.isArray(partidos)?partidos.map(p=>Array.isArray(p)?[...p]:p):[],
    datos,
@@ -1417,12 +1432,22 @@ async function backup(){
    equiposExtra,
    overrides
  };
+ const nombreLiga=String(ligaActiva?.nombre||"liga")
+   .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+   .replace(/[^a-zA-Z0-9]+/g,"_").replace(/^_+|_+$/g,"") || "liga";
+ const anio=temporadaDB?.anio||new Date().getFullYear();
+ const fechaArchivo=fechaRespaldo.slice(0,10);
+ const nombreArchivo=`respaldo_${nombreLiga}_${anio}_${fechaArchivo}.json`;
  let blob=new Blob([JSON.stringify(snapshot,null,2)],{type:"application/json"});
- let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="respaldo_hockey_liga_2026.json";a.click();URL.revokeObjectURL(a.href);
- meta.ultimoRespaldo=new Date().toISOString();
+ let a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);
+ a.download=nombreArchivo;
+ a.click();
+ URL.revokeObjectURL(a.href);
+ meta.ultimoRespaldo=fechaRespaldo;
  await save(false);
  render();
- toast("Respaldo completo creado ✓");
+ toast(`Respaldo de ${ligaActiva?.nombre||"la liga activa"} creado ✓`);
 }
 async function sincronizarRespaldoRelacional(){
   if(!supabaseClient||!cloudUser||cloudRole!=="admin"||!currentLigaId) return 0;
@@ -1553,6 +1578,33 @@ function restore(e){
    try{
      if(relationalMode && cloudRole!=="admin"){alert("En modo web, solo el administrador puede publicar un respaldo para todos.");e.target.value="";return;}
      let x=JSON.parse(r.result);
+
+     // En multiliga, un respaldo solo puede restaurarse sobre la misma liga.
+     // Los respaldos nuevos (v7) llevan el ID de la liga; los antiguos se
+     // validan por nombre + departamento para conservar compatibilidad.
+     if(relationalMode){
+       const ligaActiva=ligasDB.find(l=>l.id===currentLigaId)||null;
+       const ligaRespaldo=x.liga||null;
+       if(!ligaActiva){
+         alert("Selecciona una liga antes de restaurar un respaldo.");
+         e.target.value="";
+         return;
+       }
+       if(!ligaRespaldo){
+         alert("Este respaldo no identifica una liga. En modo multiliga no se puede restaurar para evitar mezclar datos entre ligas.");
+         e.target.value="";
+         return;
+       }
+       const mismoId=ligaRespaldo.id && String(ligaRespaldo.id)===String(ligaActiva.id);
+       const mismoNombre=String(ligaRespaldo.nombre||"").trim().toLowerCase()===String(ligaActiva.nombre||"").trim().toLowerCase();
+       const mismoDepartamento=String(ligaRespaldo.departamento||"").trim().toLowerCase()===String(ligaActiva.departamento||"").trim().toLowerCase();
+       if(!mismoId && !(mismoNombre && mismoDepartamento)){
+         alert(`Este respaldo pertenece a otra liga.\n\nRespaldo: ${ligaRespaldo.nombre||"Sin nombre"} — ${ligaRespaldo.departamento||"Sin departamento"}\nLiga activa: ${ligaActiva.nombre} — ${ligaActiva.departamento}\n\nNo se restauró ningún dato.`);
+         e.target.value="";
+         return;
+       }
+     }
+
      datos=x.datos||x||{};
      meta=x.meta||meta;
      equiposExtra=x.equiposExtra||[];
