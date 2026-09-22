@@ -182,6 +182,17 @@ tbody tr:hover{background:#f8fafc}
 
 .match-add-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.match-field{min-width:0;display:flex;flex-direction:column;gap:5px}.match-field-full{margin:12px 0}.match-field label{display:block;min-width:0!important;margin:0!important}.match-field input,.match-field select{width:100%;min-width:0!important;max-width:100%}
 @media(max-width:650px){.match-add-fields{grid-template-columns:1fr;gap:10px}.match-field-full{margin:10px 0}.match-field input,.match-field select{width:100%}}
+/* ===== CUADRO DE ELIMINACIÓN ===== */
+.elim-title{margin:24px 0 10px;color:#17324d}
+.elim-bracket{display:grid;grid-template-columns:repeat(4,minmax(190px,1fr));gap:14px;align-items:start;margin:10px 0 22px;overflow-x:auto;padding-bottom:6px}
+.elim-round{background:#f8fafc;border:1px solid #d9e1e8;border-radius:14px;padding:12px;min-width:190px}
+.elim-round h4{margin:0 0 10px;text-align:center;color:#17324d;font-size:.9rem}
+.elim-match{background:#fff;border:1px solid #e1e8ee;border-radius:10px;padding:9px;margin:8px 0;box-shadow:0 2px 7px rgba(15,35,55,.05)}
+.elim-match .elim-team{display:flex;justify-content:space-between;gap:8px;padding:3px 0;font-size:.85rem}
+.elim-match .elim-score{font-weight:800;white-space:nowrap}
+.elim-match .elim-meta{font-size:.7rem;color:#667085;border-bottom:1px dashed #e5e7eb;padding-bottom:5px;margin-bottom:4px}
+.elim-empty{font-size:.8rem;color:#94a3b8;text-align:center;padding:10px 4px}
+@media(max-width:650px){.elim-bracket{grid-template-columns:repeat(4,210px);gap:10px}.elim-round{min-width:210px}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -658,7 +669,7 @@ async function loadRelationalData(ligaId){
   partidos=(matches||[]).map((m,i)=>{ relationalMatchIds[i]=m.id; return [m.categoria,m.numero??String(i+1),String(m.hora||"07:00").slice(0,5),teamById[m.equipo_local_id]?.nombre||"",teamById[m.equipo_visitante_id]?.nombre||"",m.cancha||"1",m.jornada_id,m.fase||"liga"]; });
   datos={};
   (results||[]).forEach(r=>{const i=Object.keys(relationalMatchIds).find(k=>relationalMatchIds[k]===r.partido_id); if(i!==undefined){relationalResultIds[i]=r.id; datos[i]={local:r.goles_local||0,visitante:r.goles_visitante||0,amarillas:(r.amarillas_local||0)+(r.amarillas_visitante||0),rojas:(r.rojas_local||0)+(r.rojas_visitante||0),amarillas_local:r.amarillas_local||0,amarillas_visitante:r.amarillas_visitante||0,rojas_local:r.rojas_local||0,rojas_visitante:r.rojas_visitante||0,finalizado:!!r.finalizado,guardado:new Date().toISOString()};}});
-  partidosExtra=[]; equiposExtra=[]; overrides={}; jornadaActiva=JORNADAS[0]?.id||"";
+  partidosExtra=[]; equiposExtra=(equipos||[]).map(e=>({id:e.id,nombre:e.nombre,categoria:e.categoria||"General",genero:e.genero||"",activo:e.activo!==false})); overrides={}; jornadaActiva=JORNADAS[0]?.id||"";
   relationalMode=true;
   actualizarSelectorLiga(); actualizarCabeceraLiga(); actualizarModoDatos();
   return true;
@@ -946,46 +957,86 @@ function corto(nombre){
  return n;
 }
 
-/* ---------- Equipos (renombrar en todos los partidos donde aparezca) ---------- */
+/* ---------- Equipos por categoría ---------- */
 function listaEquipos(){
- let set=new Set();
- partidosActivos().forEach(({p})=>{set.add(p[3]);set.add(p[4]);});
- equiposExtra.forEach(e=>set.add(e.nombre));
- return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+ let map=new Map();
+ // En partidos, la categoría está en p[0]. Así el mismo nombre puede existir
+ // en varias categorías sin mezclarse.
+ partidosActivos().forEach(({p})=>{
+   const categoria=String(p[0]||"General").trim()||"General";
+   [p[3],p[4]].forEach(nombre=>{
+     nombre=String(nombre||"").trim();
+     if(!nombre) return;
+     const key=nombre.toLowerCase()+"|"+categoria.toLowerCase();
+     if(!map.has(key)) map.set(key,{nombre,categoria});
+   });
+ });
+ equiposExtra.forEach(e=>{
+   const nombre=String(e.nombre||"").trim();
+   const categoria=String(e.categoria||"General").trim()||"General";
+   if(!nombre) return;
+   const key=nombre.toLowerCase()+"|"+categoria.toLowerCase();
+   if(!map.has(key)) map.set(key,{nombre,categoria});
+ });
+ return [...map.values()].sort((a,b)=>{
+   const c=a.categoria.localeCompare(b.categoria,'es');
+   return c || a.nombre.localeCompare(b.nombre,'es');
+ });
+}
+function opcionesEquiposCategoria(cat, seleccionado="") {
+ const lista = listaEquipos().filter(e=>String(e.categoria||"").trim().toLowerCase()===String(cat||"").trim().toLowerCase());
+ const opciones = lista.map(e=>{
+   const nombre=String(e.nombre||"");
+   return `<option value="${escapeAttr(nombre)}" ${nombre===seleccionado?'selected':''}>${escapeAttr(nombre)} · ${escapeAttr(e.categoria)}</option>`;
+ }).join("");
+ return `<option value="">Selecciona un equipo</option>${opciones}`;
 }
 function renderEquiposPanel(){
  if(cloudRole!=="admin") return "";
  equiposListado=listaEquipos();
  let h=`<div class="card equipos-panel" style="grid-column:1/-1">
- <div class="meta"><b>🧑‍🤝‍🧑 Equipos</b><span class="muted"> · actualizar, eliminar o agregar equipos</span></div>
- <div class="row">
-  <input id="nuevoEquipoNombre" type="text" placeholder="Nombre del nuevo equipo">
-  <select id="nuevoEquipoCategoria"><option value="">Categoría</option>${CATEGORIAS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select>
+ <div class="meta"><b>🧑‍🤝‍🧑 Equipos</b><span class="muted"> · actualizar, eliminar o agregar equipos por categoría</span></div>
+ <div class="row" style="align-items:flex-start">
+  <input id="nuevoEquipoNombre" type="text" placeholder="Nombre del nuevo equipo" style="min-width:240px">
+  <div style="flex:1;min-width:280px">
+   <div class="muted" style="margin-bottom:6px"><b>Categorías donde participa</b> · puedes seleccionar varias</div>
+   <div id="nuevoEquipoCategorias" style="display:flex;flex-wrap:wrap;gap:8px">
+    ${CATEGORIAS.map((c,i)=>`<label style="display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;cursor:pointer"><input type="checkbox" class="chkNuevaCategoria" value="${escapeAttr(c)}"> ${escapeAttr(c)}</label>`).join('')}
+   </div>
+  </div>
   <button class="success" onclick="agregarEquipo()">➕ Agregar equipo</button>
  </div>
  <div>`;
  equiposListado.forEach((eq,idx)=>{
-   h+=`<span class="pill">${eq}<button title="Renombrar equipo" onclick="renombrarEquipoIndex(${idx})">✏️</button><button title="Eliminar equipo" onclick="eliminarEquipoIndex(${idx})">🗑️</button></span>`;
+   h+=`<span class="pill">${eq.nombre} <small style="opacity:.75">· ${eq.categoria}</small><button title="Renombrar equipo" onclick="renombrarEquipoIndex(${idx})">✏️</button><button title="Eliminar equipo" onclick="eliminarEquipoIndex(${idx})">🗑️</button></span>`;
  });
  h+=`</div></div>`;
  return h;
 }
 async function renombrarEquipoIndex(idx){
  if(cloudRole!=="admin"){alert("Solo el administrador puede modificar equipos.");return;}
- let oldName=equiposListado[idx];
- let nuevo=prompt("Nuevo nombre para:\n"+oldName,oldName);
+ let equipo=equiposListado[idx];
+ if(!equipo) return;
+ let oldName=equipo.nombre, categoria=equipo.categoria;
+ let nuevo=prompt(`Nuevo nombre para:\n${oldName} · ${categoria}`,oldName);
  if(nuevo===null) return;
  nuevo=nuevo.trim();
- if(!nuevo||nuevo===oldName) return;
+ if(!nuevo||nuevo.toLowerCase()===oldName.toLowerCase()) return;
  if(relationalMode){
-   const keys=Object.keys(relationalTeamIds).filter(k=>k.startsWith(oldName+"|"));
-   for(const k of keys){ const id=relationalTeamIds[k]; const r=await supabaseClient.from("equipos").update({nombre:nuevo}).eq("id",id); if(r.error){alert("No se pudo renombrar el equipo: "+r.error.message);return;} }
+   const id=relationalTeamIds[oldName+"|"+categoria];
+   if(id){
+     const r=await supabaseClient.from("equipos").update({nombre:nuevo}).eq("id",id);
+     if(r.error){alert("No se pudo renombrar el equipo: "+r.error.message);return;}
+   }
    await loadRelationalData(currentLigaId); render(); toast("Equipo renombrado ✓"); return;
  }
- equiposExtra.forEach(e=>{if(e.nombre===oldName)e.nombre=nuevo;});
+ equiposExtra.forEach(e=>{
+   if(e.nombre===oldName && String(e.categoria||"General")===categoria) e.nombre=nuevo;
+ });
  partidos.forEach((base,i)=>{
    if(estaEliminado(i)) return;
    let p=getPartido(i);
+   if(String(p[0]||"General")!==categoria) return;
    let cambios={};
    if(p[3]===oldName) cambios.local=nuevo;
    if(p[4]===oldName) cambios.visitante=nuevo;
@@ -998,29 +1049,64 @@ async function renombrarEquipoIndex(idx){
 
 async function agregarEquipo(){
  if(cloudRole!=="admin"){alert("Solo el administrador puede agregar equipos.");return;}
-  let nombre=document.getElementById("nuevoEquipoNombre").value.trim();
-  let categoria=document.getElementById("nuevoEquipoCategoria").value;
-  if(!nombre||!categoria){alert("Escribe el nombre y selecciona la categoría.");return;}
-  if(listaEquipos().some(e=>e.toLowerCase()===nombre.toLowerCase())){alert("Ese equipo ya existe.");return;}
-  if(relationalMode){
-    const r=await supabaseClient.from("equipos").insert({liga_id:currentLigaId,nombre,categoria,activo:true}).select("id").single();
-    if(r.error){alert("No se pudo agregar el equipo: "+r.error.message);return;}
-    await loadRelationalData(currentLigaId); render(); toast("Equipo agregado ✓"); return;
-  }
-  equiposExtra.push({nombre,categoria});
-  await save(); render(); toast("Equipo agregado ✓");
+ const nombre=document.getElementById("nuevoEquipoNombre").value.trim();
+ const categorias=[...document.querySelectorAll(".chkNuevaCategoria:checked")].map(x=>x.value).filter(Boolean);
+ if(!nombre){alert("Escribe el nombre del equipo.");return;}
+ if(!categorias.length){alert("Selecciona al menos una categoría.");return;}
+
+ // Un mismo equipo puede participar en varias categorías.
+ // Solo se bloquea si ya existe en ESA categoría.
+ const existentes=listaEquipos();
+ const duplicadas=categorias.filter(cat=>existentes.some(e=>
+   e.nombre.toLowerCase()===nombre.toLowerCase() &&
+   String(e.categoria||"General").toLowerCase()===cat.toLowerCase()
+ ));
+ if(duplicadas.length){
+   alert(`El equipo "${nombre}" ya existe en: ${duplicadas.join(", ")}.\n\nPuedes agregarlo en las demás categorías.`);
+   return;
+ }
+
+ const nuevas=categorias.map(c=>({nombre,categoria:c}));
+ if(relationalMode){
+   const payload=nuevas.map(x=>({liga_id:currentLigaId,nombre:x.nombre,categoria:x.categoria,activo:true}));
+   const r=await supabaseClient.from("equipos").insert(payload).select("id");
+   if(r.error){alert("No se pudieron agregar los equipos: "+r.error.message);return;}
+   await loadRelationalData(currentLigaId);
+   render();
+   toast(`${nuevas.length} ${nuevas.length===1?'categoría':'categorías'} agregada${nuevas.length===1?'':'s'} ✓`);
+   return;
+ }
+
+ nuevas.forEach(x=>equiposExtra.push(x));
+ await save();
+ render();
+ toast(`${nuevas.length} ${nuevas.length===1?'categoría':'categorías'} agregada${nuevas.length===1?'':'s'} ✓`);
 }
 
 async function eliminarEquipoIndex(idx){
  if(cloudRole!=="admin"){alert("Solo el administrador puede eliminar equipos.");return;}
-  let nombre=equiposListado[idx];
-  if(!nombre) return;
-  let relacionados=partidosActivos().filter(({p})=>p[3]===nombre||p[4]===nombre);
-  if(!relacionados.length){toast("Ese equipo no tiene partidos activos.");return;}
-  if(!confirm("¿Eliminar el equipo completo?\n\n"+nombre+"\n\nSe eliminarán sus partidos y resultados registrados.")) return;
-  relacionados.forEach(({i})=>{overrides[i]={...(overrides[i]||{}),eliminado:true};delete datos[i];});
-  equiposExtra=equiposExtra.filter(e=>e.nombre!==nombre);
-  await save(); render(); toast("Equipo eliminado ✓");
+ let equipo=equiposListado[idx];
+ if(!equipo) return;
+ let nombre=equipo.nombre, categoria=equipo.categoria;
+ let relacionados=partidosActivos().filter(({p})=>String(p[0]||"General")===categoria&&(p[3]===nombre||p[4]===nombre));
+ if(!relacionados.length){
+   if(relationalMode){
+     const id=relationalTeamIds[nombre+"|"+categoria];
+     if(id){
+       if(!confirm(`¿Eliminar el equipo?\n\n${nombre} · ${categoria}`)) return;
+       const r=await supabaseClient.from("equipos").update({activo:false}).eq("id",id);
+       if(r.error){alert("No se pudo eliminar el equipo: "+r.error.message);return;}
+       await loadRelationalData(currentLigaId); render(); toast("Equipo eliminado ✓");
+     }
+     return;
+   }
+   equiposExtra=equiposExtra.filter(e=>!(e.nombre===nombre && String(e.categoria||"General")===categoria));
+   await save(); render(); toast("Equipo eliminado ✓"); return;
+ }
+ if(!confirm(`¿Eliminar el equipo completo?\n\n${nombre} · ${categoria}\n\nSe eliminarán sus partidos y resultados registrados de esta categoría.`)) return;
+ relacionados.forEach(({i})=>{overrides[i]={...(overrides[i]||{}),eliminado:true};delete datos[i];});
+ equiposExtra=equiposExtra.filter(e=>!(e.nombre===nombre && String(e.categoria||"General")===categoria));
+ await save(); render(); toast("Equipo eliminado ✓");
 }
 
 /* ---------- Jornadas ---------- */
@@ -1030,6 +1116,11 @@ function renderJornadaTabs(){
    h+=`<button class="${jornadaActiva===j.id?'active':''}" onclick="cambiarJornada('${j.id}')">${j.label}</button>`;
  });
  if(relationalMode && puede("puede_gestionar_partidos")) h+=`<button class="success" onclick="agregarJornada()">➕ Nueva jornada</button>`;
+ if(relationalMode && !jornadaActiva){
+   h+=`<div class="muted small" style="width:100%;padding:8px 2px">
+     ⚠️ No hay una jornada seleccionada. Crea una con <b>➕ Nueva jornada</b> y luego selecciona la jornada para agregar partidos.
+   </div>`;
+ }
  h+=`</div>`;
  return h;
 }
@@ -1048,11 +1139,18 @@ function renderMatches(){
        html+=`<div class="card" style="border-color:#b45309">
        <div class="meta"><b>✏️ Editando partido</b><span class="pill fase-pill">${etiquetaFase(p[7])}</span><span class="muted"> · ${p[0]} · Partido ${p[1]}</span></div>
        <div class="row">
+         <div><label class="small muted">Fase</label><select id="editFase_${i}">
+           <option value="liga" ${(p[7]||"liga")==="liga"?"selected":""}>Liga / fase regular</option>
+           <option value="cuartos" ${p[7]==="cuartos"?"selected":""}>Cuartos de final</option>
+           <option value="semifinal" ${p[7]==="semifinal"?"selected":""}>Semifinal</option>
+           <option value="tercer_lugar" ${p[7]==="tercer_lugar"?"selected":""}>Tercer lugar</option>
+           <option value="final" ${p[7]==="final"?"selected":""}>Final</option>
+         </select></div>
          <div><label class="small muted">Hora</label><input id="editHora_${i}" type="time" value="${p[2]}"></div>
          <div><label class="small muted">Cancha</label><input id="editCancha_${i}" type="text" value="${escapeAttr(p[5])}"></div>
        </div>
-       <div class="row"><div><label class="small muted">Equipo local</label><input id="editLocal_${i}" type="text" value="${escapeAttr(p[3])}"></div></div>
-       <div class="row"><div><label class="small muted">Equipo visitante</label><input id="editVisitante_${i}" type="text" value="${escapeAttr(p[4])}"></div></div>
+       <div class="row"><div><label class="small muted">Equipo local</label><select id="editLocal_${i}">${opcionesEquiposCategoria(p[0],p[3])}</select></div></div>
+       <div class="row"><div><label class="small muted">Equipo visitante</label><select id="editVisitante_${i}">${opcionesEquiposCategoria(p[0],p[4])}</select></div></div>
        <div class="actions"><button class="success" onclick="guardarEdicionPartido(${i})">Guardar cambios</button><button onclick="cancelarEdicionPartido()">Cancelar</button></div>
        </div>`;
        return;
@@ -1084,12 +1182,12 @@ function renderMatches(){
    if(puede("puede_gestionar_partidos"))    html+=`<div class="card" style="border-style:dashed;border-color:#94a3b8">
    <div class="meta"><b>➕ Agregar partido</b><span class="muted"> · ${cat}</span></div>
    <div class="match-add-fields">
-     <div class="match-field"><label class="small muted">Fase</label><select id="newFase_${slug}"><option value="liga">Liga / fase regular</option><option value="cuartos">Cuartos de final</option><option value="semifinal">Semifinal</option><option value="final">Final</option></select></div>
+     <div class="match-field"><label class="small muted">Fase</label><select id="newFase_${slug}"><option value="liga">Liga / fase regular</option><option value="cuartos">Cuartos de final</option><option value="semifinal">Semifinal</option><option value="tercer_lugar">Tercer lugar</option><option value="final">Final</option></select></div>
      <div class="match-field"><label class="small muted">Hora</label><input id="newHora_${slug}" type="time"></div>
      <div class="match-field"><label class="small muted">Cancha</label><input id="newCancha_${slug}" type="text" placeholder="1"></div>
    </div>
-   <div class="match-field match-field-full"><label class="small muted">Equipo local</label><input id="newLocal_${slug}" type="text" placeholder="Nombre del equipo"></div>
-   <div class="match-field match-field-full"><label class="small muted">Equipo visitante</label><input id="newVisitante_${slug}" type="text" placeholder="Nombre del equipo"></div>
+   <div class="match-field match-field-full"><label class="small muted">Equipo local</label><select id="newLocal_${slug}">${opcionesEquiposCategoria(cat)}</select></div>
+   <div class="match-field match-field-full"><label class="small muted">Equipo visitante</label><select id="newVisitante_${slug}">${opcionesEquiposCategoria(cat)}</select></div>
    <div class="actions"><button class="primary" onclick="agregarPartido('${cat.replace(/'/g,"\\'")}')">➕ Agregar partido</button></div>
    </div>`;
  });
@@ -1097,13 +1195,27 @@ function renderMatches(){
 }
 async function agregarPartido(cat){
  if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para crear partidos.");return;}
+
+ // En modo Supabase, partido.jornada_id es UUID. Si no hay una jornada
+ // seleccionada, Supabase recibe "" y PostgreSQL responde:
+ // "invalid input syntax for type uuid: \"\"".
+ if(relationalMode){
+   if(!supabaseClient || !currentLigaId || !temporadaDB?.id){
+     alert("La liga o la temporada no están cargadas. Recarga los datos de la liga e inténtalo de nuevo.");
+     return;
+   }
+   if(!jornadaActiva || !esUUID(jornadaActiva)){
+     alert("Primero crea y selecciona una jornada. El partido necesita una jornada válida antes de poder guardarse.");
+     return;
+   }
+ }
  let slug=slugCat(cat);
  let fase=document.getElementById("newFase_"+slug)?.value||"liga";
  let hora=document.getElementById("newHora_"+slug).value.trim();
  let cancha=document.getElementById("newCancha_"+slug).value.trim()||"1";
  let local=document.getElementById("newLocal_"+slug).value.trim();
  let visitante=document.getElementById("newVisitante_"+slug).value.trim();
- if(!local||!visitante){alert("Escribe el nombre de ambos equipos.");return;}
+ if(!local||!visitante){alert("Selecciona ambos equipos de la lista.");return;}
  if(local===visitante){alert("El equipo local y visitante no pueden ser el mismo.");return;}
  if(!hora){alert("Selecciona la hora del partido.");return;}
  let numExistentes=partidosActivos().filter(x=>x.p[0]===cat && (x.p[6]||"1")===jornadaActiva && (x.p[7]||"liga")===fase).length;
@@ -1114,7 +1226,14 @@ async function agregarPartido(cat){
    if(!el||!ev){alert("Los equipos deben existir en la liga activa y pertenecer a la categoría seleccionada.");return;}
    const j=JORNADAS.find(x=>x.id===jornadaActiva);
    const r=await supabaseClient.from("partidos").insert({liga_id:currentLigaId,temporada_id:temporadaDB.id,jornada_id:jornadaActiva,categoria:cat,fase,numero:numExistentes+1,equipo_local_id:el.id,equipo_visitante_id:ev.id,fecha:j?.fecha||null,hora,cancha,estado:"programado"}).select("id").single();
-   if(r.error){alert("No se pudo agregar el partido: "+r.error.message);return;}
+   if(r.error){
+     let msg=r.error.message||"Error desconocido";
+     if(/invalid input syntax for type uuid/i.test(msg) && /""/.test(msg)){
+       msg="Falta un UUID válido. Verifica que haya una liga, temporada, jornada y ambos equipos seleccionados.";
+     }
+     alert("No se pudo agregar el partido: "+msg);
+     return;
+   }
    await loadRelationalData(currentLigaId); render(); toast("Partido agregado ✓"); return;
  }
  partidosExtra.push([cat,String(numExistentes+1),hora,local,visitante,cancha,jornadaActiva,fase]);
@@ -1156,6 +1275,7 @@ function iniciarEdicionPartido(i){ if(!puede("puede_gestionar_partidos")){alert(
 function cancelarEdicionPartido(){ editandoPartido=null; render(); }
 async function guardarEdicionPartido(i){
  if(!puede("puede_gestionar_partidos")){alert("No tienes permiso para editar partidos.");return;}
+ let fase=document.getElementById("editFase_"+i)?.value||"liga";
  let hora=document.getElementById("editHora_"+i).value.trim();
  let cancha=document.getElementById("editCancha_"+i).value.trim()||"1";
  let local=document.getElementById("editLocal_"+i).value.trim();
@@ -1167,11 +1287,11 @@ async function guardarEdicionPartido(i){
    if(r.error){alert("No se pudieron consultar los equipos: "+r.error.message);return;}
    const cat=partidos[i][0],el=r.data.find(e=>e.nombre===local&&e.categoria===cat),ev=r.data.find(e=>e.nombre===visitante&&e.categoria===cat);
    if(!el||!ev){alert("Los equipos indicados no existen en la liga activa.");return;}
-   const u=await supabaseClient.from("partidos").update({hora,cancha,equipo_local_id:el.id,equipo_visitante_id:ev.id}).eq("id",relationalMatchIds[i]);
+   const u=await supabaseClient.from("partidos").update({fase,hora,cancha,equipo_local_id:el.id,equipo_visitante_id:ev.id}).eq("id",relationalMatchIds[i]);
    if(u.error){alert("No se pudo actualizar el partido: "+u.error.message);return;}
    editandoPartido=null; await loadRelationalData(currentLigaId); render(); toast("Partido actualizado ✓"); return;
  }
- overrides[i]={...(overrides[i]||{}),hora,cancha,local,visitante};
+ overrides[i]={...(overrides[i]||{}),fase,hora,cancha,local,visitante};
  editandoPartido=null;
  await save();render();toast("Partido actualizado ✓");
 }
@@ -1201,9 +1321,12 @@ function renderResults(){
  document.getElementById("results").innerHTML=h||"<p>Aún no hay resultados registrados.</p>";
 }
 
-/* ---------- Tabla de posiciones (acumulada, todas las jornadas) ---------- */
+/* ---------- Tabla de posiciones + cuadro de eliminación ---------- */
+function esFaseRegular(fase){ return String(fase||"liga").toLowerCase()==="liga"; }
+function esEliminacion(fase){ return !esFaseRegular(fase); }
 function calcularTabla(cat){
- let activos=partidosActivos().filter(x=>x.p[0]===cat);
+ // IMPORTANTE: la tabla de posiciones solo usa partidos de fase regular.
+ let activos=partidosActivos().filter(x=>x.p[0]===cat && esFaseRegular(x.p[7]));
  let teams=[...new Set(activos.flatMap(x=>[x.p[3],x.p[4]]))];
  let st={};teams.forEach(t=>st[t]={team:t,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,pts:0});
  activos.forEach(({p,i})=>{let d=datos[i];if(!d?.finalizado)return;
@@ -1213,13 +1336,33 @@ function calcularTabla(cat){
  return Object.values(st).sort((a,b)=>b.pts-a.pts || (b.gf-b.gc)-(a.gf-a.gc) || b.gf-a.gf);
 }
 const CATEGORIAS=["12–14 FEMENINA","12–14 MASCULINA","15–17 FEMENINA","15–17 MASCULINA"];
+const FASES_ELIMINACION=["cuartos","semifinal","tercer_lugar","final"];
+function partidosEliminacion(cat){
+ return partidosActivos().filter(x=>x.p[0]===cat && esEliminacion(x.p[7]));
+}
+function tarjetaEliminacion(x){
+ const d=datos[x.i];
+ const gl=d?.finalizado?d.local:"—", gv=d?.finalizado?d.visitante:"—";
+ return `<div class="elim-match"><div class="elim-meta">${etiquetaJornada(x.p[6])} · ${x.p[2]||"Sin hora"}</div><div class="elim-team"><span>${x.p[3]}</span><span class="elim-score">${gl}</span></div><div class="elim-team"><span>${x.p[4]}</span><span class="elim-score">${gv}</span></div></div>`;
+}
+function renderCuadroEliminacion(cat){
+ const elim=partidosEliminacion(cat);
+ if(!elim.length) return `<p class="muted">Aún no hay partidos de eliminación en esta categoría.</p>`;
+ return `<div class="elim-bracket">${FASES_ELIMINACION.map(fase=>{
+   const arr=elim.filter(x=>String(x.p[7]||"").toLowerCase()===fase);
+   return `<div class="elim-round"><h4>${etiquetaFase(fase)}</h4>${arr.length?arr.map(tarjetaEliminacion).join(""):'<div class="elim-empty">Sin partidos</div>'}</div>`;
+ }).join("")}</div>`;
+}
 function renderStandings(){
  let h="";
  CATEGORIAS.forEach(cat=>{
    let arr=calcularTabla(cat);
-   h+=`<h3>${cat}</h3><table><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th></tr>`;
-   arr.forEach((x,n)=>h+=`<tr><td>${n+1}</td><td>${x.team}</td><td>${x.pj}</td><td>${x.pg}</td><td>${x.pe}</td><td>${x.pp}</td><td>${x.gf}</td><td>${x.gc}</td><td>${x.gf-x.gc}</td><td><b>${x.pts}</b></td></tr>`);
+   h+=`<h3>${cat}</h3><h4>Tabla de posiciones · fase regular</h4><table><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th></tr>`;
+   if(arr.length){
+     arr.forEach((x,n)=>h+=`<tr><td>${n+1}</td><td>${x.team}</td><td>${x.pj}</td><td>${x.pg}</td><td>${x.pe}</td><td>${x.pp}</td><td>${x.gf}</td><td>${x.gc}</td><td>${x.gf-x.gc}</td><td><b>${x.pts}</b></td></tr>`);
+   }else h+=`<tr><td colspan="10" class="muted">Sin partidos de fase regular.</td></tr>`;
    h+="</table>";
+   h+=`<h4 class="elim-title">🏆 Cuadro de eliminación</h4>${renderCuadroEliminacion(cat)}`;
  });
  document.getElementById("standings").innerHTML=h;
 }
@@ -1310,13 +1453,17 @@ function renderHistorial(){
 }
 
 /* ---------- Reporte imprimible ---------- */
+function esUUID(v){
+ const s=String(v||"").trim();
+ return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+}
+
 function etiquetaFase(fase){
  const f=String(fase||"liga").toLowerCase();
- return ({liga:"Liga / fase regular",cuartos:"Cuartos de final",semifinal:"Semifinal",final:"Final"})[f]||String(fase||"Liga / fase regular");
+ return ({liga:"Liga / fase regular",cuartos:"Cuartos de final",semifinal:"Semifinal",tercer_lugar:"Tercer lugar",tercer:"Tercer lugar",final:"Final"})[f]||String(fase||"Liga / fase regular");
 }
 function etiquetaJornada(id){
  const s=String(id??"").trim();
- const esUUID=v=>/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(v||"").trim());
  const j=(JORNADAS||[]).find(x=>String(x.id)===s || String(x.ronda)===s || String(x.label||"").trim().toLowerCase()===s.toLowerCase());
  if(j){
    const label=String(j.label||"").trim();
@@ -1340,17 +1487,35 @@ function generarReporte(){
  <p><b>Partidos totales:</b> ${activos.length} &nbsp; | &nbsp; <b>Finalizados:</b> ${finalizados.length} &nbsp; | &nbsp; <b>Goles:</b> ${totalGoles} &nbsp; | &nbsp; <b>Tarjetas:</b> ${totalTarjetas}</p>`;
 
  CATEGORIAS.forEach(cat=>{
-   h+=`<h3>${cat}</h3><h4>Resultados</h4><table><tr><th>Jornada</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th></tr>`;
-   activos.forEach(({p,i})=>{
-     if(p[0]!==cat) return;
-     let d=datos[i];
-     h+=`<tr><td>${etiquetaJornada(p[6])}</td><td>${etiquetaFase(p[7])}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
-   });
-   h+="</table><h4>Tabla de posiciones (acumulada)</h4>";
+   const regulares=activos.filter(x=>x.p[0]===cat && esFaseRegular(x.p[7]));
+   const eliminacion=activos.filter(x=>x.p[0]===cat && esEliminacion(x.p[7]));
+   h+=`<h3>${cat}</h3><h4>Resultados · fase regular</h4><table><tr><th>Jornada</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th></tr>`;
+   if(regulares.length){
+     regulares.forEach(({p,i})=>{
+       let d=datos[i];
+       h+=`<tr><td>${etiquetaJornada(p[6])}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
+     });
+   }else h+=`<tr><td colspan="5">Sin partidos de fase regular.</td></tr>`;
+   h+="</table><h4>Tabla de posiciones · fase regular</h4>";
    let arr=calcularTabla(cat);
    h+=`<table><tr><th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>GF</th><th>GC</th><th>DG</th><th>PTS</th></tr>`;
-   arr.forEach((x,n)=>h+=`<tr><td>${n+1}</td><td>${x.team}</td><td>${x.pj}</td><td>${x.pg}</td><td>${x.pe}</td><td>${x.pp}</td><td>${x.gf}</td><td>${x.gc}</td><td>${x.gf-x.gc}</td><td><b>${x.pts}</b></td></tr>`);
+   if(arr.length) arr.forEach((x,n)=>h+=`<tr><td>${n+1}</td><td>${x.team}</td><td>${x.pj}</td><td>${x.pg}</td><td>${x.pe}</td><td>${x.pp}</td><td>${x.gf}</td><td>${x.gc}</td><td>${x.gf-x.gc}</td><td><b>${x.pts}</b></td></tr>`);
+   else h+=`<tr><td colspan="10">Sin datos de fase regular.</td></tr>`;
    h+="</table>";
+
+   h+=`<h4 style="margin-top:18px">🏆 Cuadro de eliminación</h4>`;
+   if(!eliminacion.length){
+     h+=`<p class="muted">Sin partidos de eliminación.</p>`;
+   }else{
+     h+=`<table><tr><th>Fase</th><th>Jornada</th><th>Hora</th><th>Local</th><th>Resultado</th><th>Visitante</th></tr>`;
+     FASES_ELIMINACION.forEach(fase=>{
+       eliminacion.filter(x=>String(x.p[7]||"").toLowerCase()===fase).forEach(({p,i})=>{
+         let d=datos[i];
+         h+=`<tr><td><b>${etiquetaFase(fase)}</b></td><td>${etiquetaJornada(p[6])}</td><td>${p[2]}</td><td>${p[3]}</td><td>${d?.finalizado?`<b>${d.local} – ${d.visitante}</b>`:"Pendiente"}</td><td>${p[4]}</td></tr>`;
+       });
+     });
+     h+="</table>";
+   }
  });
 
  h+=`<p class="muted" style="margin-top:20px">Reporte generado el ${new Date().toLocaleString("es-SV")}</p>
